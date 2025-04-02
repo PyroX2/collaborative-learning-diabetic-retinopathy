@@ -122,15 +122,26 @@ masks_dirs = sorted(os.listdir(masks_path))
 # Create a list fo paths for every mask of every type
 masks_list = [sorted(os.listdir(os.path.join(masks_path, masks_dir))) for masks_dir in masks_dirs]
 
+suffixes = ["_MA.tif", "_HE.tif", "_EX.tif", "_SE.tif", "_OD.tif"]
+
 for i in range(len(images)):
     image = cv2.imread(os.path.join(images_path, images[i]))
 
     # Read mask of every type for current image
     image_masks = []
+    masks_filenames = []
     for mask_dir_index, dirname in enumerate(masks_dirs):
         # Read masks
-        mask = np.array(Image.open(os.path.join(masks_path, masks_dirs[mask_dir_index], masks_list[mask_dir_index][i]))) 
-        mask = mask*255 # Rescale from 1 to 255
+        image_filename, extension = os.path.splitext(images[i])
+        
+        mask_filename = image_filename + suffixes[mask_dir_index]
+        if mask_filename not in masks_list[mask_dir_index]:
+            mask = np.zeros_like(image).astype(np.uint8)
+        else:
+            mask = np.array(Image.open(os.path.join(masks_path, masks_dirs[mask_dir_index], mask_filename))) 
+            mask = mask*255 # Rescale from 1 to 255
+
+        masks_filenames.append(mask_filename)
         image_masks.append(mask)
 
     # Fit fundus so that it takes whole image
@@ -147,12 +158,22 @@ for i in range(len(images)):
     
     # Show processed image
     cv2.imshow('Processed images', processed_frame)
+    cv2.imwrite(os.path.join(output_images_path, images[i]), processed_frame)
+
     
     # Show masks
     for mask_index, mask in enumerate(processed_image_masks):
         cv2.imshow(f"Processed mask {mask_index}", mask)
 
-    if cv2.waitKey(0) == ord('q'):
+        if not os.path.exists(os.path.join(output_masks_path, masks_dirs[mask_index])):
+            os.makedirs(os.path.join(output_masks_path, masks_dirs[mask_index]))
+
+        mask_filename, extension = os.path.splitext(masks_filenames[mask_index])
+        mask_filename = mask_filename + '.png'
+
+        cv2.imwrite(os.path.join(output_masks_path, masks_dirs[mask_index], mask_filename), mask)
+
+    if cv2.waitKey(1) == ord('q'):
         break
 cv2.destroyAllWindows()
 
