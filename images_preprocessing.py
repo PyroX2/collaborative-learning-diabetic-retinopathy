@@ -7,8 +7,11 @@ from PIL import Image
 
 SCALE = 300
 
-images_path = 'datasets/segmentation/original_images/train_set'
-masks_path = 'datasets/segmentation/segmentation_ground_truths/train_set'
+images_path = 'datasets/segmentation/original_images/test_set'
+masks_path = 'datasets/segmentation/segmentation_ground_truths/test_set'
+
+output_images_path = 'datasets/processed_segmentation_dataset/images/test_set'
+output_masks_path = 'datasets/processed_segmentation_dataset/masks/test_set'
 
 
 def pad_image(frame):
