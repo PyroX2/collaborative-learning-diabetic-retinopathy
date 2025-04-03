@@ -10,8 +10,8 @@ SCALE = 300
 images_path = 'datasets/segmentation/original_images/test_set'
 masks_path = 'datasets/segmentation/segmentation_ground_truths/test_set'
 
-output_images_path = 'datasets/processed_segmentation_dataset/images/test_set'
-output_masks_path = 'datasets/processed_segmentation_dataset/masks/test_set'
+output_images_path = 'datasets/processed_segmentation_dataset/test_set/images'
+output_masks_path = 'datasets/processed_segmentation_dataset/test_set/masks'
 
 
 def pad_image(frame):
@@ -121,11 +121,12 @@ images = sorted(os.listdir(images_path))
 
 # Get dir for every type of mask
 masks_dirs = sorted(os.listdir(masks_path))
+masks_dirs = [masks_dir for masks_dir in masks_dirs if os.path.isdir(os.path.join(masks_path, masks_dir))]
 
 # Create a list fo paths for every mask of every type
 masks_list = [sorted(os.listdir(os.path.join(masks_path, masks_dir))) for masks_dir in masks_dirs]
 
-suffixes = ["_MA.tif", "_HE.tif", "_EX.tif", "_SE.tif", "_OD.tif"]
+suffixes = {"microaneurysms": "_MA.tif", "haemorrhages":"_HE.tif", "hard_exudates":"_EX.tif", "soft_exudates":"_SE.tif", "optic_disc": "_OD.tif"}
 
 for i in range(len(images)):
     image = cv2.imread(os.path.join(images_path, images[i]))
@@ -137,12 +138,19 @@ for i in range(len(images)):
         # Read masks
         image_filename, extension = os.path.splitext(images[i])
         
-        mask_filename = image_filename + suffixes[mask_dir_index]
+        mask_filename = image_filename + suffixes[masks_dirs[mask_dir_index]]
         if mask_filename not in masks_list[mask_dir_index]:
             mask = np.zeros_like(image).astype(np.uint8)
+            print(f"Mask {mask_filename} not found in {masks_dirs[mask_dir_index]}")
         else:
             mask = np.array(Image.open(os.path.join(masks_path, masks_dirs[mask_dir_index], mask_filename))) 
-            mask = mask*255 # Rescale from 1 to 255
+
+        print(mask.shape)
+        if mask.shape[-1] == 4:
+            mask = cv2.cvtColor(mask, cv2.COLOR_RGBA2GRAY)
+            ret, mask = cv2.threshold(mask, 0, 255, cv2.THRESH_BINARY)
+        else:
+            mask *= 255
 
         masks_filenames.append(mask_filename)
         image_masks.append(mask)
@@ -161,9 +169,11 @@ for i in range(len(images)):
     
     # Show processed image
     cv2.imshow('Processed images', processed_frame)
+
+    if not os.path.exists(output_images_path):
+        os.makedirs(output_images_path)
     cv2.imwrite(os.path.join(output_images_path, images[i]), processed_frame)
 
-    
     # Show masks
     for mask_index, mask in enumerate(processed_image_masks):
         cv2.imshow(f"Processed mask {mask_index}", mask)
