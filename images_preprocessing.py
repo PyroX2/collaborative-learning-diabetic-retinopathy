@@ -140,7 +140,7 @@ for i in range(len(images)):
         
         mask_filename = image_filename + suffixes[masks_dirs[mask_dir_index]]
         if mask_filename not in masks_list[mask_dir_index]:
-            mask = np.zeros_like(image).astype(np.uint8)
+            mask = np.zeros_like(image[..., 0]).astype(np.uint8)
             print(f"Mask {mask_filename} not found in {masks_dirs[mask_dir_index]}")
         else:
             mask = np.array(Image.open(os.path.join(masks_path, masks_dirs[mask_dir_index], mask_filename))) 
@@ -168,7 +168,7 @@ for i in range(len(images)):
         continue
     
     # Show processed image
-    cv2.imshow('Processed images', processed_frame)
+    # cv2.imshow('Processed images', processed_frame)
 
     if not os.path.exists(output_images_path):
         os.makedirs(output_images_path)
@@ -176,7 +176,7 @@ for i in range(len(images)):
 
     # Show masks
     for mask_index, mask in enumerate(processed_image_masks):
-        cv2.imshow(f"Processed mask {mask_index}", mask)
+        # cv2.imshow(f"Processed mask {mask_index}", mask)
 
         if not os.path.exists(os.path.join(output_masks_path, masks_dirs[mask_index])):
             os.makedirs(os.path.join(output_masks_path, masks_dirs[mask_index]))
@@ -186,8 +186,8 @@ for i in range(len(images)):
 
         cv2.imwrite(os.path.join(output_masks_path, masks_dirs[mask_index], mask_filename), mask)
 
-    if cv2.waitKey(1) == ord('q'):
-        break
+    # if cv2.waitKey(1) == ord('q'):
+    #     break
 cv2.destroyAllWindows()
 
 
