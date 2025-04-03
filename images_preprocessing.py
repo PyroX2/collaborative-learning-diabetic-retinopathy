@@ -7,11 +7,11 @@ from PIL import Image
 
 SCALE = 300
 
-images_path = 'datasets/segmentation/original_images/test_set'
-masks_path = 'datasets/segmentation/segmentation_ground_truths/test_set'
+images_path = 'datasets/segmentation/original_images/train_set'
+masks_path = 'datasets/segmentation/segmentation_ground_truths/train_set'
 
-output_images_path = 'datasets/processed_segmentation_dataset/test_set/images'
-output_masks_path = 'datasets/processed_segmentation_dataset/test_set/masks'
+output_images_path = 'datasets/processed_segmentation_dataset/train_set/images'
+output_masks_path = 'datasets/processed_segmentation_dataset/train_set/masks'
 
 
 def pad_image(frame):
@@ -145,7 +145,6 @@ for i in range(len(images)):
         else:
             mask = np.array(Image.open(os.path.join(masks_path, masks_dirs[mask_dir_index], mask_filename))) 
 
-        print(mask.shape)
         if mask.shape[-1] == 4:
             mask = cv2.cvtColor(mask, cv2.COLOR_RGBA2GRAY)
             ret, mask = cv2.threshold(mask, 0, 255, cv2.THRESH_BINARY)
@@ -166,9 +165,6 @@ for i in range(len(images)):
     
     if processed_frame is None:
         continue
-    
-    # Show processed image
-    # cv2.imshow('Processed images', processed_frame)
 
     if not os.path.exists(output_images_path):
         os.makedirs(output_images_path)
@@ -176,8 +172,6 @@ for i in range(len(images)):
 
     # Show masks
     for mask_index, mask in enumerate(processed_image_masks):
-        # cv2.imshow(f"Processed mask {mask_index}", mask)
-
         if not os.path.exists(os.path.join(output_masks_path, masks_dirs[mask_index])):
             os.makedirs(os.path.join(output_masks_path, masks_dirs[mask_index]))
 
@@ -186,8 +180,6 @@ for i in range(len(images)):
 
         cv2.imwrite(os.path.join(output_masks_path, masks_dirs[mask_index], mask_filename), mask)
 
-    # if cv2.waitKey(1) == ord('q'):
-    #     break
 cv2.destroyAllWindows()
 
 
