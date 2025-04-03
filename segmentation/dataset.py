@@ -13,6 +13,7 @@ class DRSegmentationDataset(Dataset):
         self.images = []
         for image_path in sorted(os.listdir(images_path)):
             img = read_image(os.path.join(images_path, image_path))
+            img = (img/255).to(torch.float32)
             self.images.append(img)
 
         masks_path = os.path.join(input_path, "masks")
@@ -23,6 +24,7 @@ class DRSegmentationDataset(Dataset):
             masks = []
             for mask_path in sorted(os.listdir(os.path.join(masks_path, mask_dir))):
                 mask = read_image(os.path.join(masks_path, mask_dir, mask_path))
+                mask = (mask/255).to(torch.float32)
                 masks.append(mask)
             masks = torch.stack(masks)
             self.masks.append(masks)
