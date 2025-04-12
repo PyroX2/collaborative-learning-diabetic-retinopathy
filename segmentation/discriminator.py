@@ -6,6 +6,8 @@ class Discriminator(Module):
     def __init__(self, in_channels=8):
         super(Discriminator).__init__()
 
+        # Initial in_channels is 8 for 3 layers RGB + 5 binary masks
+
         self.conv_tuple_1 = self.convolution_tuple(in_channels=in_channels, out_channels=32)
         self.conv_tuple_2 = self.convolution_tuple(in_channels=in_channels, out_channels=64)
         self.conv_tuple_3 = self.convolution_tuple(in_channels=in_channels, out_channels=128)
