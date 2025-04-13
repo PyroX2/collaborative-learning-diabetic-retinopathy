@@ -4,17 +4,17 @@ import torch
 
 class Discriminator(Module):
     def __init__(self, in_channels=8):
-        super(Discriminator).__init__()
+        super().__init__()
 
         # Initial in_channels is 8 for 3 layers RGB + 5 binary masks
 
         self.conv_tuple_1 = self.convolution_tuple(in_channels=in_channels, out_channels=32)
-        self.conv_tuple_2 = self.convolution_tuple(in_channels=in_channels, out_channels=64)
-        self.conv_tuple_3 = self.convolution_tuple(in_channels=in_channels, out_channels=128)
-        self.conv_tuple_4 = self.convolution_tuple(in_channels=in_channels, out_channels=256)
-        self.conv_tuple_5 = self.convolution_tuple(in_channels=in_channels, out_channels=512)
-        self.max_pool_layer = torch.nn.MaxPool2d()
-        self.fully_connected = torch.nn.Linear(128, 1)
+        self.conv_tuple_2 = self.convolution_tuple(in_channels=32, out_channels=64)
+        self.conv_tuple_3 = self.convolution_tuple(in_channels=64, out_channels=128)
+        self.conv_tuple_4 = self.convolution_tuple(in_channels=128, out_channels=256)
+        self.conv_tuple_5 = self.convolution_tuple(in_channels=256, out_channels=512)
+        self.global_avg_pool_layer = torch.nn.AdaptiveAvgPool2d((1, 1))
+        self.fully_connected = torch.nn.Linear(512, 1)
         self.sigmoid = torch.nn.Sigmoid()
 
     def forward(self, x):
@@ -23,8 +23,10 @@ class Discriminator(Module):
         con3 = self.conv_tuple_3(con2)
         con4 = self.conv_tuple_4(con3)
         con5 = self.conv_tuple_5(con4)
-        max_pooled = self.max_pool_layer(con5)
-        output = self.sigmoid(self.fully_connected(max_pooled))
+        max_pooled = self.global_avg_pool_layer(con5)
+        logits = self.fully_connected(max_pooled.squeeze())
+        output = self.sigmoid(logits)
+        output = output.squeeze()
 
         return output
 
