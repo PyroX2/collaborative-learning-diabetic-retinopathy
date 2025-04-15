@@ -7,29 +7,27 @@ class Discriminator(Module):
         super().__init__()
 
         # Initial in_channels is 8 for 3 layers RGB + 5 binary masks
-
-        self.conv_tuple_1 = self.convolution_tuple(in_channels=in_channels, out_channels=32)
-        self.conv_tuple_2 = self.convolution_tuple(in_channels=32, out_channels=64)
-        self.conv_tuple_3 = self.convolution_tuple(in_channels=64, out_channels=128)
-        self.conv_tuple_4 = self.convolution_tuple(in_channels=128, out_channels=256)
-        self.conv_tuple_5 = self.convolution_tuple(in_channels=256, out_channels=512)
-        self.global_avg_pool_layer = torch.nn.AdaptiveAvgPool2d((1, 1))
+        self.conv_tuple_1 = self.convolution_tuple(in_channels=in_channels, out_channels=32) # 320x320
+        self.conv_tuple_2 = self.convolution_tuple(in_channels=32, out_channels=64) # 160x160
+        self.conv_tuple_3 = self.convolution_tuple(in_channels=64, out_channels=128) # 80x80
+        self.conv_tuple_4 = self.convolution_tuple(in_channels=128, out_channels=256) # 40x40
+        self.conv_tuple_5 = self.convolution_tuple(in_channels=256, out_channels=512) # 20x20
+        # self.global_avg_pool_layer = torch.nn.AvgPool2d((2, 2))
         self.fully_connected = torch.nn.Linear(512, 1)
         self.sigmoid = torch.nn.Sigmoid()
 
     def forward(self, x):
-        con1 = self.conv_tuple_1(x)
-        con2 = self.conv_tuple_2(con1)
-        con3 = self.conv_tuple_3(con2)
-        con4 = self.conv_tuple_4(con3)
-        con5 = self.conv_tuple_5(con4)
-        max_pooled = self.global_avg_pool_layer(con5)
-        logits = self.fully_connected(max_pooled.squeeze())
+        x = self.conv_tuple_1(x)
+        x = self.conv_tuple_2(x)
+        x = self.conv_tuple_3(x)
+        x = self.conv_tuple_4(x)
+        x = self.conv_tuple_5(x)
+        x = x.mean((-2, -1))
+        # flattened = torch.flatten(con5, start_dim=1)
+        logits = self.fully_connected(x)
         output = self.sigmoid(logits)
-        output = output.squeeze()
 
         return output
-
 
     @staticmethod
     def convolution_tuple(in_channels, out_channels):
