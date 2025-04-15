@@ -6,12 +6,13 @@ from PIL import Image
 
 
 SCALE = 300
+USE_MASKS = False
 
-images_path = 'datasets/segmentation/original_images/train_set'
+images_path = '/home/wilk/diabetic_retinopathy/datasets/grading/1. Original Images/b. Testing Set'
 masks_path = 'datasets/segmentation/segmentation_ground_truths/train_set'
 
-output_images_path = 'datasets/processed_segmentation_dataset/train_set/images'
-output_masks_path = 'datasets/processed_segmentation_dataset/train_set/masks'
+output_images_path = '/home/wilk/diabetic_retinopathy/datasets/grading/test_set/images'
+output_masks_path = 'datasets/processed_segmentation_dataset/train_set/masks_copy'
 
 
 def pad_image(frame):
@@ -36,7 +37,7 @@ def cut_low_values(frame):
     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2YUV)
     y, u, v = cv2.split(frame)
     mask = np.ones_like(y)*255
-    mask[y < 10] = 0
+    mask[y < 20] = 0
     return mask
 
 def circle_detection(frame):
@@ -53,7 +54,7 @@ def circle_detection(frame):
 
     # Blur for better circle detection
     mask_blurred = cv2.GaussianBlur(mask, (25, 25), 0) 
-    
+
     # Detect circles in the image
     detected_circles = cv2.HoughCircles(mask_blurred,  
                    cv2.HOUGH_GRADIENT, 1, 100, param1 = 50, 
@@ -72,7 +73,7 @@ def circle_detection(frame):
             return frame, (a, b), r
     return frame, None, None
 
-def fundus_fitting(frame, masks):
+def fundus_fitting(frame, masks=[]):
     processed_frame, center, radius = circle_detection(frame.copy())
 
     # Get left and right coordinates of the circle
@@ -120,11 +121,12 @@ def mask_area_around_fundus(frame, top_pad, bottom_pad):
 images = sorted(os.listdir(images_path))
 
 # Get dir for every type of mask
-masks_dirs = sorted(os.listdir(masks_path))
-masks_dirs = [masks_dir for masks_dir in masks_dirs if os.path.isdir(os.path.join(masks_path, masks_dir))]
+if USE_MASKS:
+    masks_dirs = sorted(os.listdir(masks_path))
+    masks_dirs = [masks_dir for masks_dir in masks_dirs if os.path.isdir(os.path.join(masks_path, masks_dir))]
 
-# Create a list fo paths for every mask of every type
-masks_list = [sorted(os.listdir(os.path.join(masks_path, masks_dir))) for masks_dir in masks_dirs]
+    # Create a list fo paths for every mask of every type
+    masks_list = [sorted(os.listdir(os.path.join(masks_path, masks_dir))) for masks_dir in masks_dirs]
 
 suffixes = {"microaneurysms": "_MA.tif", "haemorrhages":"_HE.tif", "hard_exudates":"_EX.tif", "soft_exudates":"_SE.tif", "optic_disc": "_OD.tif"}
 
@@ -133,29 +135,34 @@ for i in range(len(images)):
 
     # Read mask of every type for current image
     image_masks = []
-    masks_filenames = []
-    for mask_dir_index, dirname in enumerate(masks_dirs):
-        # Read masks
-        image_filename, extension = os.path.splitext(images[i])
-        
-        mask_filename = image_filename + suffixes[masks_dirs[mask_dir_index]]
-        if mask_filename not in masks_list[mask_dir_index]:
-            mask = np.zeros_like(image[..., 0]).astype(np.uint8)
-            print(f"Mask {mask_filename} not found in {masks_dirs[mask_dir_index]}")
-        else:
-            mask = np.array(Image.open(os.path.join(masks_path, masks_dirs[mask_dir_index], mask_filename))) 
 
-        if mask.shape[-1] == 4:
-            mask = cv2.cvtColor(mask, cv2.COLOR_RGBA2GRAY)
-            ret, mask = cv2.threshold(mask, 0, 255, cv2.THRESH_BINARY)
-        else:
-            mask *= 255
+    if USE_MASKS:
+        masks_filenames = []
+        for mask_dir_index, dirname in enumerate(masks_dirs):
+            # Read masks
+            image_filename, extension = os.path.splitext(images[i])
+            
+            mask_filename = image_filename + suffixes[masks_dirs[mask_dir_index]]
+            if mask_filename not in masks_list[mask_dir_index]:
+                mask = np.zeros_like(image[..., 0]).astype(np.uint8)
+                print(f"Mask {mask_filename} not found in {masks_dirs[mask_dir_index]}")
+            else:
+                mask = np.array(Image.open(os.path.join(masks_path, masks_dirs[mask_dir_index], mask_filename))) 
 
-        masks_filenames.append(mask_filename)
-        image_masks.append(mask)
+            if mask.shape[-1] == 4:
+                mask = cv2.cvtColor(mask, cv2.COLOR_RGBA2GRAY)
+                ret, mask = cv2.threshold(mask, 0, 255, cv2.THRESH_BINARY)
+            else:
+                mask *= 255
+
+            masks_filenames.append(mask_filename)
+            image_masks.append(mask)
 
     # Fit fundus so that it takes whole image
-    processed_frame, processed_image_masks, top_pad, bottom_pad = fundus_fitting(image, image_masks)
+    if USE_MASKS:
+        processed_frame, processed_image_masks, top_pad, bottom_pad = fundus_fitting(image, image_masks)
+    else:
+        processed_frame, processed_image_masks, top_pad, bottom_pad = fundus_fitting(image)
 
     # Enhance features and colors
     processed_frame = color_enhacement(processed_frame)
@@ -171,15 +178,14 @@ for i in range(len(images)):
     cv2.imwrite(os.path.join(output_images_path, images[i]), processed_frame)
 
     # Show masks
-    for mask_index, mask in enumerate(processed_image_masks):
-        if not os.path.exists(os.path.join(output_masks_path, masks_dirs[mask_index])):
-            os.makedirs(os.path.join(output_masks_path, masks_dirs[mask_index]))
+    if USE_MASKS:
+        for mask_index, mask in enumerate(processed_image_masks):
+            if not os.path.exists(os.path.join(output_masks_path, masks_dirs[mask_index])):
+                os.makedirs(os.path.join(output_masks_path, masks_dirs[mask_index]))
 
-        mask_filename, extension = os.path.splitext(masks_filenames[mask_index])
-        mask_filename = mask_filename + '.png'
+            mask_filename, extension = os.path.splitext(masks_filenames[mask_index])
+            mask_filename = mask_filename + '.png'
 
-        cv2.imwrite(os.path.join(output_masks_path, masks_dirs[mask_index], mask_filename), mask)
+            cv2.imwrite(os.path.join(output_masks_path, masks_dirs[mask_index], mask_filename), mask)
 
 cv2.destroyAllWindows()
-
-
