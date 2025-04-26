@@ -12,7 +12,6 @@ class Discriminator(Module):
         self.conv_tuple_3 = self.convolution_tuple(in_channels=64, out_channels=128) # 80x80
         self.conv_tuple_4 = self.convolution_tuple(in_channels=128, out_channels=256) # 40x40
         self.conv_tuple_5 = self.convolution_tuple(in_channels=256, out_channels=512) # 20x20
-        # self.global_avg_pool_layer = torch.nn.AvgPool2d((2, 2))
         self.fully_connected = torch.nn.Linear(512, 1)
         self.sigmoid = torch.nn.Sigmoid()
 
@@ -22,8 +21,7 @@ class Discriminator(Module):
         x = self.conv_tuple_3(x)
         x = self.conv_tuple_4(x)
         x = self.conv_tuple_5(x)
-        x = x.mean((-2, -1))
-        # flattened = torch.flatten(con5, start_dim=1)
+        x = x.mean((-2, -1)) # global average pooling
         logits = self.fully_connected(x)
         output = self.sigmoid(logits)
 
