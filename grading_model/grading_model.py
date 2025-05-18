@@ -36,7 +36,7 @@ class GradingModel(nn.Module):
                                         nn.MaxPool2d((2, 2))
                                     )
         
-        self.fc = nn.Linear(1024, 5)
+        self.fc = nn.Sequential(nn.Linear(1024, 5), nn.Dropout(0.5))
 
         self.conv1x1 = nn.Conv2d(
                             in_channels=1024,  # number of input channels
