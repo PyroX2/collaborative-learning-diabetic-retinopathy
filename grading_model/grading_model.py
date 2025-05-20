@@ -37,6 +37,8 @@ class GradingModel(nn.Module):
                                         nn.MaxPool2d((2, 2))
                                     )
         
+        self.fc = nn.Sequential(nn.Linear(1024, 5), nn.Dropout(0.5))
+
         self.mask_preprocess_seq = nn.Sequential(nn.Conv2d(1, 8, (3, 3), padding='same'),
                                                  nn.ReLU(),
                                                  nn.BatchNorm2d(8),
@@ -47,8 +49,6 @@ class GradingModel(nn.Module):
         self.mask_input_image_conv = nn.Sequential(nn.Conv2d(48, 32, (3, 3), padding='same'),
                                                    nn.ReLU())
         
-        self.fc = nn.Linear(1024, 5)
-
         self.output_conv1x1 = nn.Conv2d(in_channels=5*1024, out_channels=1024, kernel_size=1, stride=1, padding=0)
 
         self.conv1x1 = nn.Conv2d(
