@@ -180,3 +180,4 @@ Research/
 runs/
 models/segmentation/segmentaion_*
 models/classification/classification_*
+/datasets
