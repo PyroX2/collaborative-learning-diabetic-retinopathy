@@ -37,7 +37,8 @@ class GradingModel(nn.Module):
                                         nn.MaxPool2d((2, 2))
                                     )
         
-        self.fc = nn.Sequential(nn.Linear(1024, 5), nn.Dropout(0.5))
+        # self.fc = nn.Sequential(nn.Linear(1024, 5), nn.Dropout(0.0))
+        self.fc = nn.Linear(1024, 5)
 
         self.mask_preprocess_seq = nn.Sequential(nn.Conv2d(1, 8, (3, 3), padding='same'),
                                                  nn.ReLU(),
@@ -74,12 +75,12 @@ class GradingModel(nn.Module):
         return logits, f_high
 
 
-    def forward(self, x, masks=None):
+    def forward(self, x, masks=None, f_low=None, f_high=None):
         # Masks should be of size BATCH_SIZE x number_of_masks x height x width
-        f_low = self.f_low_seq(x)
-        logits, f_high = self.logits_from_flow(f_low)
-        if masks is None:
-            return logits, None
+        if masks is None or f_low is None or f_high is None:
+            f_low = self.f_low_seq(x)
+            logits, f_high = self.logits_from_flow(f_low)
+            return logits, f_low, f_high, None
         else:
             concat_masks = []
 
@@ -94,7 +95,7 @@ class GradingModel(nn.Module):
 
             attention_maps = torch.zeros(concat_masks.shape[0], 5, 640, 640)
 
-            all_masks_classification_outputs = torch.zeros((concat_masks.shape[0], 5*1024, 1, 1), device="cuda" if torch.cuda.is_available() else "cpu")
+            all_masks_classification_outputs = torch.zeros((concat_masks.shape[0], 5*1024, 1, 1), device="cuda:1" if torch.cuda.is_available() else "cpu")
             for i in range(5):
                 f_low_att = concat_masks[:, i]
 
@@ -116,4 +117,4 @@ class GradingModel(nn.Module):
             pre_logits = self.output_conv1x1(all_masks_classification_outputs)
             logits = self.fc(pre_logits.squeeze())
 
-            return logits, attention_maps
+            return logits, f_low, f_high, attention_maps
