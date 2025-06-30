@@ -3,7 +3,14 @@ from torch.utils.data import Dataset
 import os
 import pandas as pd
 from torchvision.io import read_image
+from torchvision.transforms import v2
 
+
+
+transforms = v2.Compose([
+    v2.RandomAdjustSharpness(sharpness_factor=2, p=0.5),
+    v2.ToDtype(torch.float32, scale=True),
+])
 
 class GradingDataset(Dataset):
     def __init__(self, images_dir: str, csv_labels: str, transform=None):
@@ -21,6 +28,8 @@ class GradingDataset(Dataset):
         img_path = self.images_paths[index]
         image = read_image(img_path)
         image = (image/255).to(torch.float32)
+
+        image = transforms(image)
 
         if self.transform is not None:
             image = self.transform(image)
