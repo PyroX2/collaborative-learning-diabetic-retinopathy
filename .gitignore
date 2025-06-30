@@ -175,3 +175,8 @@ cython_debug/
 
 datasets/
 Research/
+
+.vscode/
+runs/
+models/segmentation/segmentaion_*
+models/classification/classification_*
