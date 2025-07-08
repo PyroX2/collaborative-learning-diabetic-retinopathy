@@ -27,17 +27,17 @@ class SeparableConv2d(nn.Module):
         x = self.pointwise_conv(x)
         return x
 
-
-
 class UNet(nn.Module):
     def __init__(self, in_channels=3, out_channels=1, init_features=32, use_bias=True):
         super(UNet, self).__init__()
 
         features = init_features
-        self.encoder1 = UNet._block(in_channels, features, name="enc1", use_bias=use_bias)
+        self.encoder1 = UNet._block(in_channels, features, name="enc1", use_bias=use_bias, use_xception=False)
         self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.pointwise_shortcut_e1 = PointwiseConv2d(in_channels, features, use_bias, stride=2)
 
+        # If using xception for first tuple uncomment this line and set use_xception above to True
+        # self.pointwise_shortcut_e1 = PointwiseConv2d(in_channels, features, use_bias, stride=2)
+ 
         self.encoder2 = UNet._block(features, features * 2, name="enc2", use_bias=use_bias)
         self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.pointwise_shortcut_e2 = PointwiseConv2d(features, features*2, use_bias, stride=2)
@@ -80,7 +80,7 @@ class UNet(nn.Module):
 
     def forward(self, x):
         enc1 = self.encoder1(x)
-        enc1_pooled = self.pool1(enc1) + self.pointwise_shortcut_e1(x)
+        enc1_pooled = self.pool1(enc1)
         enc2 = self.encoder2(enc1_pooled)
         enc2_pooled = self.pool2(enc2) + self.pointwise_shortcut_e2(enc1_pooled)
         enc3 = self.encoder3(enc2_pooled)
@@ -109,13 +109,18 @@ class UNet(nn.Module):
 
     # One block consists of two convolutional layers followed by batch normalization and ReLU activation
     @staticmethod
-    def _block(in_channels, features, name, use_bias):
+    def _block(in_channels, features, name, use_bias, use_xception=True):
+        if use_xception:
+            conv_block = SeparableConv2d
+        else:
+            conv_block = nn.Conv2d
+
         return nn.Sequential(
             OrderedDict(
                 [
                     (
                         name + "separable_conv1",
-                        SeparableConv2d(
+                        conv_block(
                             in_channels=in_channels,
                             out_channels=features,
                             kernel_size=3,
@@ -128,7 +133,7 @@ class UNet(nn.Module):
                     (name + "relu1", nn.ReLU(inplace=True)),
                     (
                         name + "separable_conv2",
-                        SeparableConv2d(
+                        conv_block(
                             in_channels=features,
                             out_channels=features,
                             kernel_size=3,
