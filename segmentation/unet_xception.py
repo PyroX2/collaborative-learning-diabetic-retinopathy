@@ -26,6 +26,18 @@ class SeparableConv2d(nn.Module):
         x = self.depthwise_conv(x)
         x = self.pointwise_conv(x)
         return x
+    
+class XceptionBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding="same", bias=False):
+        super().__init__()
+        self.pointwise_conv = PointwiseConv2d(in_channels, out_channels, 1, 1, "same", bias=bias)
+
+        self.depthwise_conv = nn.Conv2d(out_channels, out_channels, kernel_size, stride, padding, groups=out_channels, bias=bias)
+
+    def forward(self, x):
+        x = self.pointwise_conv(x)
+        x = self.depthwise_conv(x)
+        return x
 
 class UNet(nn.Module):
     def __init__(self, in_channels=3, out_channels=1, init_features=32, use_bias=True):
@@ -111,7 +123,7 @@ class UNet(nn.Module):
     @staticmethod
     def _block(in_channels, features, name, use_bias, use_xception=True):
         if use_xception:
-            conv_block = SeparableConv2d
+            conv_block = XceptionBlock
         else:
             conv_block = nn.Conv2d
 
@@ -147,6 +159,36 @@ class UNet(nn.Module):
                 ]
             )
         )
+
+class UNetNoShortcut(UNet):
+    def forward(self, x):
+        enc1 = self.encoder1(x)
+        enc1_pooled = self.pool1(enc1)
+        enc2 = self.encoder2(enc1_pooled)
+        enc2_pooled = self.pool2(enc2)
+        enc3 = self.encoder3(enc2_pooled)
+        enc3_pooled = self.pool3(enc3)
+        enc4 = self.encoder4(enc3_pooled)
+        enc4_pooled = self.pool4(enc4)
+
+        bottleneck = self.bottleneck(enc4_pooled)
+
+        dec4 = self.upconv4(bottleneck)
+        dec4 = torch.cat((dec4, enc4), dim=1)
+        dec4 = self.decoder4(dec4)
+        dec3 = self.upconv3(dec4)
+        dec3 = torch.cat((dec3, enc3), dim=1)
+        dec3 = self.decoder3(dec3)
+        dec2 = self.upconv2(dec3)
+        dec2 = torch.cat((dec2, enc2), dim=1)
+        dec2 = self.decoder2(dec2)
+        dec1 = self.upconv1(dec2)
+        dec1 = torch.cat((dec1, enc1), dim=1)
+        dec1 = self.decoder1(dec1)
+
+        out = self.final_conv(dec1)
+
+        return torch.sigmoid(out)
 
 
 if __name__ == "__main__":
