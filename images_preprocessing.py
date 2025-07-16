@@ -9,12 +9,6 @@ SCALE = 300
 USE_MASKS = False
 DEBUG = False
 
-images_path = '/home/wilk/diabetic_retinopathy/large_dataset/dr_unified_v2/dr_unified_v2/test/1'
-masks_path = 'datasets/segmentation/segmentation_ground_truths/train_set'
-
-output_images_path = '/home/wilk/diabetic_retinopathy/large_dataset_processed/test/1'
-output_masks_path = '/Users/jakub/PG/collaborative_learning/diabetic_retinopathy/test_dir'
-
 
 def pad_image(frame):
     # Get width and height of frame
@@ -161,78 +155,94 @@ def mask_area_around_fundus(frame, top_pad, bottom_pad, width_pad):
 
     return processed_frame
     
-images = sorted(os.listdir(images_path))
 
-# Get dir for every type of mask
-if USE_MASKS:
-    masks_dirs = sorted(os.listdir(masks_path))
-    masks_dirs = [masks_dir for masks_dir in masks_dirs if os.path.isdir(os.path.join(masks_path, masks_dir))]
+def preprocess_images(images_path, output_images_path, masks_path=None, output_masks_path=None):
+    images = sorted(os.listdir(images_path))[:50]
 
-    # Create a list fo paths for every mask of every type
-    masks_list = [sorted(os.listdir(os.path.join(masks_path, masks_dir))) for masks_dir in masks_dirs]
-
-suffixes = {"microaneurysms": "_MA.tif", "haemorrhages":"_HE.tif", "hard_exudates":"_EX.tif", "soft_exudates":"_SE.tif", "optic_disc": "_OD.tif"}
-
-for i in range(len(images)):
-    image = cv2.imread(os.path.join(images_path, images[i]))
-
-    # Read mask of every type for current image
-    image_masks = []
-
+    # Get dir for every type of mask
     if USE_MASKS:
-        masks_filenames = []
-        for mask_dir_index, dirname in enumerate(masks_dirs):
-            # Read masks
-            image_filename, extension = os.path.splitext(images[i])
-            
-            mask_filename = image_filename + suffixes[masks_dirs[mask_dir_index]]
-            if mask_filename not in masks_list[mask_dir_index]:
-                mask = np.zeros_like(image[..., 0]).astype(np.uint8)
-                print(f"Mask {mask_filename} not found in {masks_dirs[mask_dir_index]}")
-            else:
-                mask = np.array(Image.open(os.path.join(masks_path, masks_dirs[mask_dir_index], mask_filename))) 
+        masks_dirs = sorted(os.listdir(masks_path))
+        masks_dirs = [masks_dir for masks_dir in masks_dirs if os.path.isdir(os.path.join(masks_path, masks_dir))]
 
-            if mask.shape[-1] == 4:
-                mask = cv2.cvtColor(mask, cv2.COLOR_RGBA2GRAY)
-                ret, mask = cv2.threshold(mask, 0, 255, cv2.THRESH_BINARY)
-            else:
-                mask *= 255
+        # Create a list fo paths for every mask of every type
+        masks_list = [sorted(os.listdir(os.path.join(masks_path, masks_dir))) for masks_dir in masks_dirs]
 
-            masks_filenames.append(mask_filename)
-            image_masks.append(mask)
+    suffixes = {"microaneurysms": "_MA.tif", "haemorrhages":"_HE.tif", "hard_exudates":"_EX.tif", "soft_exudates":"_SE.tif", "optic_disc": "_OD.tif"}
 
-    # Fit fundus so that it takes whole image
-    if USE_MASKS:
-        processed_frame, processed_image_masks, top_pad, bottom_pad, width_pad = fundus_fitting(image, image_masks)
-    else:
-        processed_frame, processed_image_masks, top_pad, bottom_pad, width_pad = fundus_fitting(image)
+    for i in range(len(images)):
+        image = cv2.imread(os.path.join(images_path, images[i]))
 
-    if processed_frame is None:
-        print(f"Skipping image {images[i]} due to no fundus detected.")
-        continue
+        # Read mask of every type for current image
+        image_masks = []
 
-    # Enhance features and colors
-    processed_frame = color_enhacement(processed_frame)
+        if USE_MASKS:
+            masks_filenames = []
+            for mask_dir_index, dirname in enumerate(masks_dirs):
+                # Read masks
+                image_filename, extension = os.path.splitext(images[i])
+                
+                mask_filename = image_filename + suffixes[masks_dirs[mask_dir_index]]
+                if mask_filename not in masks_list[mask_dir_index]:
+                    mask = np.zeros_like(image[..., 0]).astype(np.uint8)
+                    print(f"Mask {mask_filename} not found in {masks_dirs[mask_dir_index]}")
+                else:
+                    mask = np.array(Image.open(os.path.join(masks_path, masks_dirs[mask_dir_index], mask_filename))) 
 
-    # Mask fundus surrounding to after color enhancement
-    processed_frame = mask_area_around_fundus(processed_frame, top_pad, bottom_pad, width_pad)
-    
-    if processed_frame is None:
-        continue
+                if mask.shape[-1] == 4:
+                    mask = cv2.cvtColor(mask, cv2.COLOR_RGBA2GRAY)
+                    ret, mask = cv2.threshold(mask, 0, 255, cv2.THRESH_BINARY)
+                else:
+                    mask *= 255
 
-    if not os.path.exists(output_images_path):
-        os.makedirs(output_images_path)
-    cv2.imwrite(os.path.join(output_images_path, images[i]), processed_frame)
+                masks_filenames.append(mask_filename)
+                image_masks.append(mask)
 
-    # Show masks
-    if USE_MASKS:
-        for mask_index, mask in enumerate(processed_image_masks):
-            if not os.path.exists(os.path.join(output_masks_path, masks_dirs[mask_index])):
-                os.makedirs(os.path.join(output_masks_path, masks_dirs[mask_index]))
+        # Fit fundus so that it takes whole image
+        if USE_MASKS:
+            processed_frame, processed_image_masks, top_pad, bottom_pad, width_pad = fundus_fitting(image, image_masks)
+        else:
+            processed_frame, processed_image_masks, top_pad, bottom_pad, width_pad = fundus_fitting(image)
 
-            mask_filename, extension = os.path.splitext(masks_filenames[mask_index])
-            mask_filename = mask_filename + '.png'
+        if processed_frame is None:
+            print(f"Skipping image {images[i]} due to no fundus detected.")
+            continue
 
-            cv2.imwrite(os.path.join(output_masks_path, masks_dirs[mask_index], mask_filename), mask)
+        # Enhance features and colors
+        processed_frame = color_enhacement(processed_frame)
 
-cv2.destroyAllWindows()
+        # Mask fundus surrounding to after color enhancement
+        processed_frame = mask_area_around_fundus(processed_frame, top_pad, bottom_pad, width_pad)
+        
+        if processed_frame is None:
+            continue
+
+        if not os.path.exists(output_images_path):
+            os.makedirs(output_images_path)
+        cv2.imwrite(os.path.join(output_images_path, images[i]), processed_frame)
+
+        # Show masks
+        if USE_MASKS:
+            for mask_index, mask in enumerate(processed_image_masks):
+                if not os.path.exists(os.path.join(output_masks_path, masks_dirs[mask_index])):
+                    os.makedirs(os.path.join(output_masks_path, masks_dirs[mask_index]))
+
+                mask_filename, extension = os.path.splitext(masks_filenames[mask_index])
+                mask_filename = mask_filename + '.png'
+
+                cv2.imwrite(os.path.join(output_masks_path, masks_dirs[mask_index], mask_filename), mask)
+
+    cv2.destroyAllWindows()
+
+
+def main():
+    for split in ['train', 'val', 'test']:
+        for i in range(5):
+            images_path = f'/home/wilk/diabetic_retinopathy/datasets/eyepacs_aptos_messidor_kaggle_dataset/dr_unified_v2/dr_unified_v2/{split}/{i}'
+
+            output_images_path = f'/home/wilk/diabetic_retinopathy/datasets/test_large_dataset_processed/{split}/{i}'
+
+            preprocess_images(images_path, output_images_path)
+
+
+if __name__ == '__main__':
+    main()
