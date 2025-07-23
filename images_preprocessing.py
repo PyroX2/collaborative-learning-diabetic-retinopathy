@@ -157,7 +157,7 @@ def mask_area_around_fundus(frame, top_pad, bottom_pad, width_pad):
     
 
 def preprocess_images(images_path, output_images_path, masks_path=None, output_masks_path=None):
-    images = sorted(os.listdir(images_path))[:50]
+    images = sorted(os.listdir(images_path))
 
     # Get dir for every type of mask
     if USE_MASKS:
