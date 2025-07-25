@@ -10,75 +10,20 @@ from tqdm import tqdm
 from torchvision.datasets import ImageFolder
 from torchvision.transforms import v2
 from segmentation.unet import UNet
-
+import os
 import mlflow
+from mlflow.models import infer_signature
+
 
 torch.manual_seed(0)
 
-import os
-import sys
-
-project_root = os.path.abspath(os.path.join(os.getcwd(), ".."))
-
-# Add the project root to sys.path
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-for path in sys.path:
-    print(path)
-
-
 BATCH_SIZE = 16
-MLFLOW = False
+MLFLOW = True
 TENSORBOARD = True
-LOG_NAME = "attentive_grading_model_train"
-
-if MLFLOW:
-    mlflow.set_tracking_uri("http://localhost:5000")
+LOG_NAME = "attentive_grading_model_train_unet_unfreezed"
+NUM_EPOCHS = 100
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-
-transform = v2.Compose([
-    v2.ToTensor(), 
-    v2.Resize((640, 640)),
-    v2.RandomHorizontalFlip(p=0.5),
-    v2.RandomRotation(15)])
-
-test_images_transform = v2.Compose([
-    v2.ToTensor(), 
-    v2.Resize((640, 640))])
-
-# Kaggle Joined dataset
-train_root = "/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/eyepacs-aptos-messidor-diabetic-retinopathy-preprocessed/train"
-validation_root = "/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/eyepacs-aptos-messidor-diabetic-retinopathy-preprocessed/val"
-test_root = "/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/eyepacs-aptos-messidor-diabetic-retinopathy-preprocessed/test"
-
-train_dataset = ImageFolder(train_root, transform=transform)
-validation_dataset = ImageFolder(validation_root, transform=test_images_transform)
-test_dataset = ImageFolder(test_root, transform=test_images_transform)
-
-_, train_metrics_dataset = random_split(train_dataset, [0.9, 0.1])
-
-train_dataloader = DataLoader(train_dataset, BATCH_SIZE, shuffle=True, num_workers=42)
-validation_dataloader = DataLoader(validation_dataset, BATCH_SIZE, shuffle=False, num_workers=42)
-test_dataset = DataLoader(test_dataset, BATCH_SIZE, shuffle=False, num_workers=42)
-train_metrics_dataloader = DataLoader(train_metrics_dataset, BATCH_SIZE, shuffle=False, num_workers=42)
-
-grading_model_pretrained = GradingModel()
-grading_model_pretrained.to(device)
-grading_model_pretrained.load_state_dict(torch.load("/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/classification/grading_model_pretrained.pth", weights_only=True, map_location=device))
-
-grading_model = GradingModel()
-grading_model.to(device)
-grading_model.load_state_dict(torch.load("/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/classification/grading_model_pretrained.pth", weights_only=True, map_location=device))
-
-segmentation_model = UNet(3, 5)
-segmentation_model.to(device)
-segmentation_model.load_state_dict(torch.load("/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/segmentation/pretrained/unet_pretrained.pth", weights_only=True, map_location=device))
-
-optimizer = torch.optim.Adam(grading_model.parameters(), lr=1e-5)
-
-criterion = torch.nn.CrossEntropyLoss()
 
 if TENSORBOARD:
     writer = SummaryWriter(f"runs/{LOG_NAME}")
@@ -116,8 +61,7 @@ def validate(grading_model, grading_model_pretrained, segmentation_model, valida
                     cv2.imwrite("output_masks/reference_image.png", reference_image)
                     
                     for i in range(5):
-                        attention_map = attention_maps[0][i].cpu().detach().numpy()
-                        # mask = mask.transpose(1, 2, 0)
+                        attention_map = attention_maps[0, i].cpu().detach().numpy()
                         attention_map = (attention_map - attention_map.min()) / (attention_map.max() - attention_map.min())
                         attention_map = (attention_map * 255).astype('uint8')
 
@@ -169,7 +113,7 @@ def validate(grading_model, grading_model_pretrained, segmentation_model, valida
 
         return mean_validation_loss, accuracy_score, f1_score, auprc_score, auroc_score
 
-def train(grading_model, grading_model_pretrained, segmentation_model, train_dataloader, validation_dataloader, optimizer, criterion, n_epochs):
+def train(grading_model, grading_model_pretrained, segmentation_model, train_dataloader, train_metrics_dataloader, validation_dataloader, optimizer, criterion, n_epochs):
     best_validation_loss = float("inf")
     best_model_state_dict = None
     for epoch in range(n_epochs):
@@ -203,7 +147,7 @@ def train(grading_model, grading_model_pretrained, segmentation_model, train_dat
 
         del input_batch
         del target_batch
-        # del masks
+        del masks
         del logits
         del attention_maps
         torch.cuda.empty_cache()
@@ -245,12 +189,86 @@ def train(grading_model, grading_model_pretrained, segmentation_model, train_dat
             
         print(f"Epoch: {epoch}, Mean training loss: {mean_training_loss}, Mean validation loss: {mean_validation_loss}")
 
-    grading_model.load_state_dict(best_model_state_dict)
+    if best_model_state_dict is not None:
+        grading_model.load_state_dict(best_model_state_dict)
 
-train(grading_model, grading_model_pretrained, segmentation_model, train_dataloader, validation_dataloader, optimizer, criterion, 100)
+def main():
+    transform = v2.Compose([
+        v2.ToImage(), 
+        v2.ToDtype(torch.float32, scale=True), 
+        v2.Resize((640, 640)),
+        v2.RandomHorizontalFlip(p=0.5),
+        v2.RandomRotation(15)])
 
-torch.save(grading_model.state_dict(), "grading_model_fine_tuned.pth")
+    test_images_transform = v2.Compose([
+        v2.ToImage(), 
+        v2.ToDtype(torch.float32, scale=True), 
+        v2.Resize((640, 640))])
 
-mlflow.pytorch.log_model(grading_model)
+    # Kaggle Joined dataset
+    train_root = "/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/eyepacs-aptos-messidor-diabetic-retinopathy-preprocessed/train"
+    validation_root = "/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/eyepacs-aptos-messidor-diabetic-retinopathy-preprocessed/val"
+    test_root = "/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/eyepacs-aptos-messidor-diabetic-retinopathy-preprocessed/test"
+
+    train_dataset = ImageFolder(train_root, transform=transform)
+    validation_dataset = ImageFolder(validation_root, transform=test_images_transform)
+    test_dataset = ImageFolder(test_root, transform=test_images_transform)
+
+    _, train_metrics_dataset = random_split(train_dataset, [0.9, 0.1])
+
+    train_dataloader = DataLoader(train_dataset, BATCH_SIZE, shuffle=True, num_workers=42)
+    validation_dataloader = DataLoader(validation_dataset, BATCH_SIZE, shuffle=False, num_workers=42)
+    test_dataloader = DataLoader(test_dataset, BATCH_SIZE, shuffle=False, num_workers=42)
+    train_metrics_dataloader = DataLoader(train_metrics_dataset, BATCH_SIZE, shuffle=False, num_workers=42)
+
+    grading_model_pretrained = GradingModel()
+    grading_model_pretrained.to(device)
+    grading_model_pretrained.load_state_dict(torch.load("/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/classification/grading_model_pretrained.pth", weights_only=True, map_location=device))
+
+    grading_model = GradingModel()
+    grading_model.to(device)
+    grading_model.load_state_dict(torch.load("/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/classification/grading_model_pretrained.pth", weights_only=True, map_location=device))
+
+    segmentation_model = UNet(3, 5)
+    segmentation_model.to(device)
+    segmentation_model.load_state_dict(torch.load("/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/segmentation/pretrained/unet_pretrained.pth", weights_only=True, map_location=device))
+
+    optimizer = torch.optim.Adam(grading_model.parameters(), lr=1e-5)
+
+    criterion = torch.nn.CrossEntropyLoss()
+        
+    if MLFLOW:
+        with mlflow.start_run(run_name=LOG_NAME):
+            train(grading_model, grading_model_pretrained, segmentation_model, train_dataloader, train_metrics_dataloader, validation_dataloader, optimizer, criterion, NUM_EPOCHS)
+
+            torch.save(grading_model.state_dict(), "grading_model_fine_tuned.pth")
+
+            # Obtain data for creating signatures for models logging into mlflow
+            x_test, y_test = next(iter(test_dataloader))
+            x_test = x_test.to(device)
+
+            with torch.no_grad():
+                segmentation_model_output = segmentation_model(x_test)
+                grading_backbone_output, pretrained_f_low, pretrained_f_high, _ = grading_model_pretrained(x_test)
+                grading_head_output, _, _, _ = grading_model(x_test, segmentation_model_output, pretrained_f_low, pretrained_f_high)
+
+            x_test = x_test.cpu().numpy()
+            segmentation_model_output = segmentation_model_output.cpu().numpy()
+            grading_head_output = grading_head_output.cpu().numpy()
+            grading_backbone_output = grading_backbone_output.cpu().numpy()
+
+            grading_head_signature = infer_signature(x_test, grading_head_output)
+            grading_backbone_signature = infer_signature(x_test, grading_backbone_output)
+            segmentation_model_signature = infer_signature(x_test, segmentation_model_output)
+
+            mlflow.pytorch.log_model(grading_model_pretrained, registered_model_name="grading_model_fine_tuned_backbone", signature=grading_head_signature)
+            mlflow.pytorch.log_model(grading_model, registered_model_name="grading_model_fine_tuned_head", signature=grading_backbone_signature)
+            mlflow.pytorch.log_model(segmentation_model, registered_model_name="segmentation_model_grading_fine_tune", signature=segmentation_model_signature)
+    else:
+        train(grading_model, grading_model_pretrained, segmentation_model, train_dataloader, train_metrics_dataloader, validation_dataloader, optimizer, criterion, NUM_EPOCHS)
+
+    torch.save(grading_model.state_dict(), "grading_model_fine_tuned.pth")
 
 
+if __name__ == '__main__':
+    main()
