@@ -182,4 +182,6 @@ models/segmentation/segmentaion_*
 models/classification/classification_*
 datasets/
 models/
-mlruns
+mlruns/
+output_masks/
+logs/
