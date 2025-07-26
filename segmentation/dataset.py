@@ -14,7 +14,7 @@ class DRSegmentationDataset(Dataset):
 
         if use_masks:
             masks_path = os.path.join(input_path, "masks")
-            self.masks_dirs = {mask_dir: [] for mask_dir in sorted(os.listdir(masks_path))}
+            self.masks_dirs = {mask_dir: [] for mask_dir in sorted(os.listdir(masks_path)) if os.path.isdir(os.path.join(masks_path, mask_dir))}
 
             self.masks = []
             for mask_dir in self.masks_dirs.keys():
