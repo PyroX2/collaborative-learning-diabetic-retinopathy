@@ -3,11 +3,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from PIL import Image
+import sys
 
 
 SCALE = 300
 USE_MASKS = False
 DEBUG = False
+IMAGE_SHAPE = 2848 # int because output image is expected to be square
 
 
 def pad_image(frame):
@@ -15,7 +17,7 @@ def pad_image(frame):
     frame_height, frame_width = frame.shape[:2]
 
     # Assumes that width will be 640 and calculating new height so that image proportion stays the same
-    ratio = 640 / max(frame_width, frame_height)
+    ratio = IMAGE_SHAPE / max(frame_width, frame_height)
     new_height = int(frame_height * ratio)
     new_width = int(frame_width * ratio)
 
@@ -24,7 +26,7 @@ def pad_image(frame):
 
 
     frame_height, frame_width = frame.shape[:2]
-    pad_size = 640 - min(new_width, new_height)
+    pad_size = IMAGE_SHAPE - min(new_width, new_height)
     if new_height < new_width:
         top = pad_size // 2
         bottom = pad_size - top 
@@ -135,20 +137,20 @@ def color_enhacement(frame):
     
     blurred = cv2.GaussianBlur(processed_frame, (0, 0), SCALE / 30)
     processed_frame = cv2.addWeighted(processed_frame, 4, blurred, -4, 128)
-
+    
     return processed_frame
 
 def mask_area_around_fundus(frame, top_pad, bottom_pad, width_pad):
     processed_frame = frame.copy()
 
     mask = np.zeros_like(processed_frame)
-    mask = cv2.circle(mask, (320, 320), 320, (255,255,255), -1)
+    mask = cv2.circle(mask, (int(IMAGE_SHAPE/2), int(IMAGE_SHAPE/2)), int(IMAGE_SHAPE/2), (255,255,255), -1)
     if not width_pad:
         mask[0:top_pad] = 0
-        mask[640 - bottom_pad:] = 0
+        mask[IMAGE_SHAPE - bottom_pad:] = 0
     else:
         mask[:, 0:top_pad] = 0
-        mask[:, 640 - bottom_pad:] = 0
+        mask[:, IMAGE_SHAPE - bottom_pad:] = 0
     mask = mask.astype(np.uint8)
     processed_frame = processed_frame.astype(np.uint8)
     processed_frame = cv2.bitwise_and(processed_frame, mask)
@@ -235,13 +237,11 @@ def preprocess_images(images_path, output_images_path, masks_path=None, output_m
 
 
 def main():
-    for split in ['train', 'val', 'test']:
-        for i in range(5):
-            images_path = f'/home/wilk/diabetic_retinopathy/datasets/eyepacs_aptos_messidor_kaggle_dataset/dr_unified_v2/dr_unified_v2/{split}/{i}'
+    images_path = f'/Users/jakub/machine_learning/vision/medical/diabetic_retinopathy/datasets/IDRiD_grading_unprocessed/1. Original Images/a. Training Set'
 
-            output_images_path = f'/home/wilk/diabetic_retinopathy/datasets/test_large_dataset_processed/{split}/{i}'
+    output_images_path = f'/Users/jakub/machine_learning/vision/medical/diabetic_retinopathy/datasets/IDRiD_grading_preprocessed/1. Original Images/a. Training Set'
 
-            preprocess_images(images_path, output_images_path)
+    preprocess_images(images_path, output_images_path)
 
 
 if __name__ == '__main__':
