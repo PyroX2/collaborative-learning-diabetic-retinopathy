@@ -35,9 +35,9 @@ def merge_masks(root_dir: str) -> None:
         classes = np.arange(1, len(masks)+1)
 
         masks = np.array(masks) / 255
-        masks_combined = np.prod(masks, axis=0)
+        masks_combined = np.sum(masks, axis=0)
         
-        if not masks_combined.all() == 0:
+        if masks_combined.max() > 1:
             raise ValueError("Masks for each class cannot overlap")
         
         classes = classes[..., None, None]
