@@ -15,7 +15,9 @@ torch.manual_seed(0)
 
 mlflow.set_tracking_uri("http://localhost:5000")
 
-BATCH_SIZE = 16
+BATCH_SIZE = 64
+LEARNING_RATE = 1e-5
+
 USE_MLFLOW = True
 USE_TENSORBOARD = True
 LOG_NAME = "grading_model_pretrain"
@@ -44,7 +46,7 @@ train_metrics_dataloader = DataLoader(train_metrics_dataset, BATCH_SIZE, shuffle
 grading_model = GradingModel()
 grading_model.to(device)
 
-optimizer = torch.optim.Adam(grading_model.parameters(), lr=1e-5)
+optimizer = torch.optim.Adam(grading_model.parameters(), lr=LEARNING_RATE)
 
 criterion = torch.nn.CrossEntropyLoss()
 
@@ -112,6 +114,9 @@ def validate(grading_model, validation_dataloader, criterion):
         return mean_validation_loss, accuracy_score, f1_score, auprc_score, auroc_score
 
 def train(grading_model, train_dataloader, validation_dataloader, optimizer, criterion, n_epochs):
+    if USE_MLFLOW:
+        mlflow.log_params({"Batch size": BATCH_SIZE, "Learning rate": LEARNING_RATE})
+
     best_validation_loss = float("inf")
     for epoch in range(n_epochs):
         training_loss = 0
@@ -142,29 +147,28 @@ def train(grading_model, train_dataloader, validation_dataloader, optimizer, cri
         mean_validation_loss, validation_accuracy_score, validation_f1_score, validation_auprc_score, validation_auroc_score = validate(grading_model, validation_dataloader, criterion)
 
         if USE_TENSORBOARD:
-            writer.add_scalar("train/Loss", mean_training_loss, epoch)
-            writer.add_scalar("train/Accuracy", train_accuracy_score, epoch)
-            writer.add_scalar("train/F1 Score", train_f1_score, epoch)
-            writer.add_scalar("train/AUPRC", train_auprc_score, epoch)
-            writer.add_scalar("train/AUROC", train_auroc_score, epoch)
-
-            writer.add_scalar("validation/Loss", mean_validation_loss, epoch)
-            writer.add_scalar("validation/Accuracy", validation_accuracy_score, epoch)
-            writer.add_scalar("validation/F1 Score", validation_f1_score, epoch)
-            writer.add_scalar("validation/AUPRC", validation_auprc_score, epoch)
-            writer.add_scalar("validation/AUROC", validation_auroc_score, epoch)
+            writer.add_scalar("Loss/train", mean_training_loss, epoch)
+            writer.add_scalar("Accuracy/train", train_accuracy_score, epoch)
+            writer.add_scalar("F1 Score/train", train_f1_score, epoch)
+            writer.add_scalar("AUPRC/train", train_auprc_score, epoch)
+            writer.add_scalar("AUROC/train", train_auroc_score, epoch)
+            writer.add_scalar("Loss/validation", mean_validation_loss, epoch)
+            writer.add_scalar("Accuracy/validation", validation_accuracy_score, epoch)
+            writer.add_scalar("F1 Score/validation", validation_f1_score, epoch)
+            writer.add_scalar("AUPRC/validation", validation_auprc_score, epoch)
+            writer.add_scalar("AUROC/validation", validation_auroc_score, epoch)
 
         if USE_MLFLOW:
-            mlflow.log_metric("train/Loss", mean_training_loss, epoch)
-            mlflow.log_metric("train/Accuracy", train_accuracy_score, epoch)
-            mlflow.log_metric("train/F1 Score", train_f1_score, epoch)
-            mlflow.log_metric("train/AUPRC", train_auprc_score, epoch)
-            mlflow.log_metric("train/AUROC", train_auroc_score, epoch)
-            mlflow.log_metric("validation/Loss", mean_validation_loss, epoch)
-            mlflow.log_metric("validation/Accuracy", validation_accuracy_score, epoch)
-            mlflow.log_metric("validation/F1 Score", validation_f1_score, epoch)
-            mlflow.log_metric("validation/AUPRC", validation_auprc_score, epoch)
-            mlflow.log_metric("validation/AUROC", validation_auroc_score, epoch)
+            mlflow.log_metric("Loss/train", mean_training_loss, epoch)
+            mlflow.log_metric("Accuracy/train", train_accuracy_score, epoch)
+            mlflow.log_metric("F1 Score/train", train_f1_score, epoch)
+            mlflow.log_metric("AUPRC/train", train_auprc_score, epoch)
+            mlflow.log_metric("AUROC/train", train_auroc_score, epoch)
+            mlflow.log_metric("Loss/validation", mean_validation_loss, epoch)
+            mlflow.log_metric("Accuracy/validation", validation_accuracy_score, epoch)
+            mlflow.log_metric("F1 Score/validation", validation_f1_score, epoch)
+            mlflow.log_metric("AUPRC/validation", validation_auprc_score, epoch)
+            mlflow.log_metric("AUROC/validation", validation_auroc_score, epoch)
 
         if mean_validation_loss < best_validation_loss:
             best_validation_loss = mean_validation_loss
