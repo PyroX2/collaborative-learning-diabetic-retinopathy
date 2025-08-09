@@ -237,11 +237,16 @@ def preprocess_images(images_path, output_images_path, masks_path=None, output_m
 
 
 def main():
-    images_path = f'/Users/jakub/machine_learning/vision/medical/diabetic_retinopathy/datasets/IDRiD_grading_unprocessed/1. Original Images/a. Training Set'
+    splits = ['train', 'test', 'val']
+    classes = [0, 1, 2, 3, 4]
 
-    output_images_path = f'/Users/jakub/machine_learning/vision/medical/diabetic_retinopathy/datasets/IDRiD_grading_preprocessed/1. Original Images/a. Training Set'
+    for split in splits:
+        for class_idx in classes:
+            images_path = f'/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/eyepacs-aptos-messidor-diabetic-retinopathy/dr_unified_v2/dr_unified_v2/{split}/{class_idx}'
 
-    preprocess_images(images_path, output_images_path)
+            output_images_path = f'/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/eyepacs-aptos-messidor-diabetic-retinopathy-original-preprocessed-no-color-enhancement/{split}/{class_idx}'
+
+            preprocess_images(images_path, output_images_path)
 
 
 if __name__ == '__main__':
