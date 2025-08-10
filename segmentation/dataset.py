@@ -12,9 +12,13 @@ class DRSegmentationDataset(Dataset):
 
         self.images_paths = [os.path.join(images_path, image_path) for image_path in sorted(os.listdir(images_path))]
 
+        self.class_names = []
+
         if use_masks:
             masks_path = os.path.join(input_path, "masks")
             self.masks_dirs = {mask_dir: [] for mask_dir in sorted(os.listdir(masks_path)) if os.path.isdir(os.path.join(masks_path, mask_dir))}
+
+            self.class_names = [class_name for class_name in sorted(os.listdir(masks_path)) if class_name != '.DS_Store']
 
             self.masks = []
             for mask_dir in self.masks_dirs.keys():
