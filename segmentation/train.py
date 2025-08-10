@@ -307,14 +307,14 @@ def train(train_dataset, epochs, k_folds=5):
     writer.add_scalar("Average validation result:", average_validation_result)
 
 if CROSS_VALIDATION:
-    epochs = 2
+    epochs = 300
     k_folds = 5
     if USE_MLFLOW:
-        mlflow.start_run(run_name=f"{LOG_NAME}_cross_validation")
-        mlflow.log_param("epochs", epochs)
-        mlflow.log_param("batch_size", PRETRAINING_BATCH_SIZE)
-        mlflow.log_param("k_folds", k_folds)
-        train(train_dataset, epochs, k_folds=k_folds)
+        with mlflow.start_run(run_name=f"{LOG_NAME}_cross_validation"):
+            mlflow.log_param("epochs", epochs)
+            mlflow.log_param("batch_size", PRETRAINING_BATCH_SIZE)
+            mlflow.log_param("k_folds", k_folds)
+            train(train_dataset, epochs, k_folds=k_folds)
     else:
         train(train_dataset, epochs, k_folds=k_folds)
 
