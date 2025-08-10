@@ -332,67 +332,67 @@ px_level_test_dataloader = torch.utils.data.DataLoader(
                       batch_size=1)
 
 def train(train_dataloader, val_dataloader, epochs, generator_model):
-        optimizer = torch.optim.Adam(generator_model.parameters(), lr=LEARNING_RATE, betas=[0.5, 0.5])
+    optimizer = torch.optim.Adam(generator_model.parameters(), lr=LEARNING_RATE, betas=[0.5, 0.5])
 
-        criterion = torch.nn.BCELoss()
+    criterion = torch.nn.BCELoss()
+    
+    for epoch in range(epochs):
+        training_epoch_loss = 0
         
-        for epoch in range(epochs):
-            training_epoch_loss = 0
-            
-            generator_model.train()
-            for px_level_batch in tqdm(train_dataloader):
-                optimizer.zero_grad()
+        generator_model.train()
+        for px_level_batch in tqdm(train_dataloader):
+            optimizer.zero_grad()
 
-                # Generator masks for px level dataset and image level dataset
-                px_level_input_tensor = px_level_batch[0].to(device)
-                px_level_target_tensor = px_level_batch[1].to(device)
-                px_level_output_masks = generator_model(px_level_input_tensor)
+            # Generator masks for px level dataset and image level dataset
+            px_level_input_tensor = px_level_batch[0].to(device)
+            px_level_target_tensor = px_level_batch[1].to(device)
+            px_level_output_masks = generator_model(px_level_input_tensor)
 
-                loss_value = criterion(px_level_output_masks, px_level_target_tensor)
+            loss_value = criterion(px_level_output_masks, px_level_target_tensor)
 
-                loss_value.backward()
-                optimizer.step()
+            loss_value.backward()
+            optimizer.step()
 
-                training_epoch_loss += loss_value.item()
+            training_epoch_loss += loss_value.item()
 
-                del px_level_input_tensor
-                del px_level_target_tensor
-                del px_level_output_masks
-                torch.cuda.empty_cache()
+            del px_level_input_tensor
+            del px_level_target_tensor
+            del px_level_output_masks
+            torch.cuda.empty_cache()
 
 
-            all_metrics, training_epoch_loss, train_generator_auroc, train_generator_auprc, train_generator_accuracy, train_generator_f1_score = calculate_mask_metrics(train_dataloader, generator_model, criterion, train_dataset.class_names)
-            log_class_metrics(all_metrics, epoch, split='train')
+        all_metrics, training_epoch_loss, train_generator_auroc, train_generator_auprc, train_generator_accuracy, train_generator_f1_score = calculate_mask_metrics(train_dataloader, generator_model, criterion, train_dataset.class_names)
+        log_class_metrics(all_metrics, epoch, split='train')
 
-            all_metrics, validation_epoch_loss, val_generator_auroc, val_generator_auprc, val_generator_accuracy, val_generator_f1_score = calculate_mask_metrics(val_dataloader, generator_model, criterion, val_dataset.class_names)
-            log_class_metrics(all_metrics, epoch, split='val')
-            
-            if USE_TENSORBOARD:
-                writer.add_scalar('GeneratorPretraining/GeneratorLoss/Train', training_epoch_loss, epoch)
-                writer.add_scalar('GeneratorPretraining/GeneratorAUROC/Train', train_generator_auroc, epoch)
-                writer.add_scalar('GeneratorPretraining/GeneratorAUPRC/Train', train_generator_auprc, epoch)
-                writer.add_scalar('GeneratorPretraining/GeneratorAccuracy/Train', train_generator_accuracy, epoch)
-                writer.add_scalar('GeneratorPretraining/GeneratorF1Score/Train', train_generator_f1_score, epoch)
+        all_metrics, validation_epoch_loss, val_generator_auroc, val_generator_auprc, val_generator_accuracy, val_generator_f1_score = calculate_mask_metrics(val_dataloader, generator_model, criterion, val_dataset.class_names)
+        log_class_metrics(all_metrics, epoch, split='val')
+        
+        if USE_TENSORBOARD:
+            writer.add_scalar('GeneratorPretraining/GeneratorLoss/Train', training_epoch_loss, epoch)
+            writer.add_scalar('GeneratorPretraining/GeneratorAUROC/Train', train_generator_auroc, epoch)
+            writer.add_scalar('GeneratorPretraining/GeneratorAUPRC/Train', train_generator_auprc, epoch)
+            writer.add_scalar('GeneratorPretraining/GeneratorAccuracy/Train', train_generator_accuracy, epoch)
+            writer.add_scalar('GeneratorPretraining/GeneratorF1Score/Train', train_generator_f1_score, epoch)
 
-                writer.add_scalar('GeneratorPretraining/GeneratorLoss/Val', validation_epoch_loss, epoch)
-                writer.add_scalar('GeneratorPretraining/GeneratorAUROC/Val', val_generator_auroc, epoch)
-                writer.add_scalar('GeneratorPretraining/GeneratorAUPRC/Val', val_generator_auprc, epoch)
-                writer.add_scalar('GeneratorPretraining/GeneratorAccuracy/Val', val_generator_accuracy, epoch)
-                writer.add_scalar('GeneratorPretraining/GeneratorF1Score/Val', val_generator_f1_score, epoch)
-            if USE_MLFLOW:
-                mlflow.log_metric('GeneratorPretraining/GeneratorLoss/Train', training_epoch_loss, step=epoch)
-                mlflow.log_metric('GeneratorPretraining/GeneratorAUROC/Train', train_generator_auroc, step=epoch)
-                mlflow.log_metric('GeneratorPretraining/GeneratorAUPRC/Train', train_generator_auprc, step=epoch)
-                mlflow.log_metric('GeneratorPretraining/GeneratorAccuracy/Train', train_generator_accuracy, step=epoch)
-                mlflow.log_metric('GeneratorPretraining/GeneratorF1Score/Train', train_generator_f1_score, step=epoch)
+            writer.add_scalar('GeneratorPretraining/GeneratorLoss/Val', validation_epoch_loss, epoch)
+            writer.add_scalar('GeneratorPretraining/GeneratorAUROC/Val', val_generator_auroc, epoch)
+            writer.add_scalar('GeneratorPretraining/GeneratorAUPRC/Val', val_generator_auprc, epoch)
+            writer.add_scalar('GeneratorPretraining/GeneratorAccuracy/Val', val_generator_accuracy, epoch)
+            writer.add_scalar('GeneratorPretraining/GeneratorF1Score/Val', val_generator_f1_score, epoch)
+        if USE_MLFLOW:
+            mlflow.log_metric('GeneratorPretraining/GeneratorLoss/Train', training_epoch_loss, step=epoch)
+            mlflow.log_metric('GeneratorPretraining/GeneratorAUROC/Train', train_generator_auroc, step=epoch)
+            mlflow.log_metric('GeneratorPretraining/GeneratorAUPRC/Train', train_generator_auprc, step=epoch)
+            mlflow.log_metric('GeneratorPretraining/GeneratorAccuracy/Train', train_generator_accuracy, step=epoch)
+            mlflow.log_metric('GeneratorPretraining/GeneratorF1Score/Train', train_generator_f1_score, step=epoch)
 
-                mlflow.log_metric('GeneratorPretraining/GeneratorLoss/Val', validation_epoch_loss, step=epoch)
-                mlflow.log_metric('GeneratorPretraining/GeneratorAUROC/Val', val_generator_auroc, step=epoch)
-                mlflow.log_metric('GeneratorPretraining/GeneratorAUPRC/Val', val_generator_auprc, step=epoch)
-                mlflow.log_metric('GeneratorPretraining/GeneratorAccuracy/Val', val_generator_accuracy, step=epoch)
-                mlflow.log_metric('GeneratorPretraining/GeneratorF1Score/Val', val_generator_f1_score, step=epoch)
+            mlflow.log_metric('GeneratorPretraining/GeneratorLoss/Val', validation_epoch_loss, step=epoch)
+            mlflow.log_metric('GeneratorPretraining/GeneratorAUROC/Val', val_generator_auroc, step=epoch)
+            mlflow.log_metric('GeneratorPretraining/GeneratorAUPRC/Val', val_generator_auprc, step=epoch)
+            mlflow.log_metric('GeneratorPretraining/GeneratorAccuracy/Val', val_generator_accuracy, step=epoch)
+            mlflow.log_metric('GeneratorPretraining/GeneratorF1Score/Val', val_generator_f1_score, step=epoch)
 
-            print(f"Epoch: {epoch}, Mean training loss: {training_epoch_loss}, Mean validation loss: {validation_epoch_loss}")
+        print(f"Epoch: {epoch}, Mean training loss: {training_epoch_loss}, Mean validation loss: {validation_epoch_loss}")
 
 generator_model = UNet(3, NUM_CLASSES)
 generator_model.to(device)
