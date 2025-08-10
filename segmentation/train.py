@@ -403,11 +403,10 @@ if USE_MLFLOW:
     with mlflow.start_run(run_name=f'{LOG_NAME}_pretraining'):
         mlflow.log_param("Batch size", PRETRAINING_BATCH_SIZE)
         mlflow.log_param("Learning rate", LEARNING_RATE)
-        train(px_level_train_dataloader, px_level_val_dataloader, 2, generator_model)
+        train(px_level_train_dataloader, px_level_val_dataloader, 250, generator_model)
 else:
-    train(px_level_train_dataloader, px_level_val_dataloader, 2, generator_model)
+    train(px_level_train_dataloader, px_level_val_dataloader, 250, generator_model)
 
-torch.save(generator_model.state_dict(), f"{LOG_NAME}_pretrained.pth")
 
 del generator_model
 torch.cuda.empty_cache()
