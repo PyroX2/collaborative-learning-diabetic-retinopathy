@@ -49,10 +49,6 @@ assert len(train_dataset.class_names) == NUM_CLASSES, "Number of classes in data
 assert len(test_dataset.class_names) == NUM_CLASSES, "Number of classes in dataset is not equal to defined number of classes"
 assert len(val_dataset.class_names) == NUM_CLASSES, "Number of classes in dataset is not equal to defined number of classes"
 
-image_level_train_dataset = DRSegmentationDataset("/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/IDRiD/grading/train_set", use_masks=False)
-image_level_test_dataset = DRSegmentationDataset("/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/IDRiD/grading/test_set", use_masks=False)
-
-
 def memory_stats():
     print("Memory allocated:", torch.cuda.memory_allocated()/1024**2)
     print("Memory cached:", torch.cuda.memory_reserved()/1024**2)
@@ -419,6 +415,10 @@ torch.cuda.empty_cache()
 # ======================================================================================================================
 # Final training with Discriminator
 
+image_level_train_dataset = DRSegmentationDataset("/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/IDRiD/grading/train_set", use_masks=False)
+image_level_test_dataset = DRSegmentationDataset("/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/IDRiD/grading/test_set", use_masks=False)
+
+
 px_level_train_dataloader = torch.utils.data.DataLoader(
                       train_dataset, 
                       batch_size=FINE_TUNING_BATCH_SIZE)
@@ -572,48 +572,3 @@ torch.save(generator_model.state_dict(), f"{LOG_NAME}_fine_tuned.pth")
 del generator_model
 torch.cuda.empty_cache()
 
-# ======================================================================================================================
-# Test final model
-
-generator_model = UNet(3, NUM_CLASSES)
-generator_model.load_state_dict(torch.load(f"{LOG_NAME}_fine_tuned.pth", map_location=device))
-generator_model.to(device)
-
-generator_model.eval()
-loss = torch.nn.BCELoss()
-test_loss = 0
-
-with torch.no_grad():
-    for test_batch_id, test_batch in enumerate(px_level_test_dataloader):                
-        input_tensor = test_batch[0].to(device)
-        target_tensor = test_batch[1].to(device)
-
-        val_output = generator_model(input_tensor)
-
-        loss_value = loss(val_output, target_tensor)
-        test_loss += loss_value.item() 
-
-mean_test_loss = test_loss / len(px_level_test_dataloader)
-print("Mean test loss:", mean_test_loss)
-
-for test_batch_id, test_batch in enumerate(px_level_test_dataloader):                
-    input_tensor = test_batch[0].to(device)
-    target_tensor = test_batch[1].to(device)
-
-    test_output = generator_model(input_tensor)
-
-    target_tensor = target_tensor.squeeze()
-    test_output = test_output.squeeze()
-
-    lesion_index = 4
-
-    fig = plt.figure()
-    plt.subplots_adjust(bottom=0.1, right=0.8, top=2)
-
-    ax = fig.add_subplot(2,1,1)
-    ax.imshow(target_tensor[lesion_index, ...].cpu(), cmap='gray')
-    ax.set_title("Ground truth")
-
-    ax = fig.add_subplot(2,1, 2)
-    ax.imshow(test_output[lesion_index, ...].cpu().detach(), cmap='gray')
-    ax.set_title("Predicted")
