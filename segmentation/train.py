@@ -37,7 +37,9 @@ if USE_TENSORBOARD:
 if USE_MLFLOW:
     mlflow.set_tracking_uri("http://localhost:5000")
 
+# Set manual seed for reproducibility
 torch.manual_seed(0)
+np.random.seed(0)
 
 train_dataset = DRSegmentationDataset("/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/processed_segmentation_dataset/train_set")
 test_dataset = DRSegmentationDataset("/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/processed_segmentation_dataset/test_set")
