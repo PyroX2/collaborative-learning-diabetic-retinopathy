@@ -394,6 +394,12 @@ def train(train_dataloader, val_dataloader, epochs, generator_model):
 
         print(f"Epoch: {epoch}, Mean training loss: {training_epoch_loss}, Mean validation loss: {validation_epoch_loss}")
 
+        if epoch % 20 == 0:
+            torch.save(generator_model.state_dict(), f"/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/checkpoints/segmentation/pretraining/{LOG_NAME}_ckpt_{epoch}.pth")
+            torch.save(optimizer.state_dict(), f"/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/checkpoints/segmentation/pretraining/{LOG_NAME}_adam_ckpt_{epoch}.pth")
+    torch.save(generator_model.state_dict(), f"/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/checkpoints/segmentation/pretraining/{LOG_NAME}_final.pth")
+    torch.save(optimizer.state_dict(), f"/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/checkpoints/segmentation/pretraining/{LOG_NAME}_adam_final.pth")
+
 generator_model = UNet(3, NUM_CLASSES)
 generator_model.to(device)
 
