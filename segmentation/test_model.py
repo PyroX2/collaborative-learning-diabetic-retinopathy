@@ -11,6 +11,9 @@ NUM_CLASSES = 5
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+test_dataset_dir = '/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/processed_segmentation_dataset/test_set'
+model_path = '/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/segmentation/segmentation_generator.pth'
+
 def calculate_mask_metrics(validation_px_dataloader, generator_model, criterion, class_names):
     targets = [[] for _ in range(NUM_CLASSES)]
     predicted_values = [[] for _ in range(NUM_CLASSES)]
@@ -71,10 +74,7 @@ def calculate_mask_metrics(validation_px_dataloader, generator_model, criterion,
         class_metrics["f1_score"] = f1_score.item()
         all_metrics.append(class_metrics)
 
-    return all_metrics
-
-
-test_dataset = DRSegmentationDataset("/home/wilk/diabetic_retinopathy/datasets/IDRiD/processed_segmentation_dataset/test_set")
+test_dataset = DRSegmentationDataset(test_dataset_dir)
 
 test_dataloader = torch.utils.data.DataLoader(
                       test_dataset, 
@@ -82,7 +82,7 @@ test_dataloader = torch.utils.data.DataLoader(
 
 loaded_model = UNet(3, NUM_CLASSES)
 loaded_model.to(device)
-loaded_model.load_state_dict(torch.load("/home/wilk/diabetic_retinopathy/models/segmentation/segmentation_generator.pth", map_location=device))
+loaded_model.load_state_dict(torch.load(model_path, map_location=device))
 
 loaded_model.eval()
 loss = torch.nn.BCELoss()
