@@ -1,6 +1,6 @@
 import torch
-from dataset import DRSegmentationDataset
-from unet import UNet
+from segmentation.dataset import DRSegmentationDataset
+from segmentation.unet import UNet
 from torcheval.metrics import BinaryAccuracy, BinaryAUROC, BinaryF1Score, BinaryAUPRC
 from tqdm import tqdm
 import matplotlib.pyplot as plt
