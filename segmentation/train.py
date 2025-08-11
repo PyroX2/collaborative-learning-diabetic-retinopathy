@@ -29,6 +29,8 @@ USE_MLFLOW = False # Whether to log metrics to mlflow
 USE_TENSORBOARD = True # Whether to log metrics to tenorboard
 LOG_NAME = "xception_dice_loss" # Name of log used for model saving, mlflow run name and tensorboard log
 
+LOSS_FUNCTION = DiceLoss
+
 device = f"cuda:{GPU}" if torch.cuda.is_available() else "cpu"
 print("Using device:", device)
 
@@ -248,7 +250,7 @@ def train(train_dataset, epochs, k_folds=5):
 
         optimizer = torch.optim.Adam(generator_model.parameters(), lr=LEARNING_RATE, betas=[0.5, 0.5])
 
-        loss = DiceLoss()
+        loss = LOSS_FUNCTION()
         
         for epoch in range(epochs):
             training_epoch_loss = 0
@@ -330,7 +332,7 @@ px_level_test_dataloader = torch.utils.data.DataLoader(
 def train(train_dataloader, val_dataloader, epochs, generator_model):
     optimizer = torch.optim.Adam(generator_model.parameters(), lr=LEARNING_RATE, betas=[0.5, 0.5])
 
-    criterion = torch.nn.BCELoss()
+    criterion = LOSS_FUNCTION()
     
     for epoch in range(epochs):
         training_epoch_loss = 0
@@ -429,7 +431,7 @@ def train(train_dataloader, image_level_dataloader, epochs, generator_model, dis
         optimizer = torch.optim.Adam(generator_model.parameters(), lr=LEARNING_RATE, betas=[0.5, 0.5])
         discriminator_optimizer = torch.optim.Adam(discriminator_model.parameters(), lr=DISCRIMINATOR_LEARNING_RATE)
 
-        loss = torch.nn.BCELoss()
+        loss = LOSS_FUNCTION()
         discriminator_loss = torch.nn.BCELoss()
         
         for epoch in range(epochs):
