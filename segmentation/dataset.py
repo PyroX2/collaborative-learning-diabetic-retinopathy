@@ -5,7 +5,7 @@ from torchvision.io import read_image
 
 
 class DRSegmentationDataset(Dataset):
-    def __init__(self, input_path, use_masks=True):
+    def __init__(self, input_path, use_masks=True, include_optic_disc=True):
         super(DRSegmentationDataset, self).__init__()
 
         images_path = os.path.join(input_path, "images")
@@ -16,9 +16,15 @@ class DRSegmentationDataset(Dataset):
 
         if use_masks:
             masks_path = os.path.join(input_path, "masks")
-            self.masks_dirs = {mask_dir: [] for mask_dir in sorted(os.listdir(masks_path)) if os.path.isdir(os.path.join(masks_path, mask_dir))}
 
-            self.class_names = [class_name for class_name in sorted(os.listdir(masks_path)) if class_name != '.DS_Store']
+            if include_optic_disc:
+                self.masks_dirs = {mask_dir: [] for mask_dir in sorted(os.listdir(masks_path)) if os.path.isdir(os.path.join(masks_path, mask_dir))}
+                excluded = ('.DS_Store')
+            else:
+                self.masks_dirs = {mask_dir: [] for mask_dir in sorted(os.listdir(masks_path)) if os.path.isdir(os.path.join(masks_path, mask_dir)) and mask_dir != 'optic_disc'}
+                excluded = ('.DS_Store', 'optic_disc')
+
+            self.class_names = [class_name for class_name in sorted(os.listdir(masks_path)) if class_name not in excluded]
 
             self.masks = []
             for mask_dir in self.masks_dirs.keys():
