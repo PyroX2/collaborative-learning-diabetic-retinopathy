@@ -25,7 +25,7 @@ USE_TENSORBOARD = True # Whether to log metrics to tenorboard
 # Name of log used for model saving, mlflow run name and tensorboard log
 LOG_NAME = 'test_run'
 
-DATSET_DIR = ''
+DATASET_DIR = ''
 
 # Directory where checkpoints are saved
 CHECKPOINT_DIR = ''
@@ -127,8 +127,8 @@ def train(train_dataset, val_dataset, epochs, generator_model):
     torch.save(optimizer.state_dict(), os.path.join(CHECKPOINT_DIR, f"{LOG_NAME}_adam_final.pth"))
 
 def main():
-    train_dataset = DRSegmentationDataset(os.path.join(DATSET_DIR, 'train_set'))
-    val_dataset = DRSegmentationDataset(os.path.join(DATSET_DIR, 'val_set'))
+    train_dataset = DRSegmentationDataset(os.path.join(DATASET_DIR, 'train_set'))
+    val_dataset = DRSegmentationDataset(os.path.join(DATASET_DIR, 'val_set'))
 
     assert len(train_dataset.class_names) == NUM_CLASSES, "Number of classes in dataset is not equal to defined number of classes"
     assert len(val_dataset.class_names) == NUM_CLASSES, "Number of classes in dataset is not equal to defined number of classes"
