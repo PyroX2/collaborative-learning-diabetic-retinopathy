@@ -25,8 +25,8 @@ GPU = 0 # gpu index to be used
 USE_MLFLOW = True # Whether to log metrics to mlflow
 USE_TENSORBOARD = True # Whether to log metrics to tenorboard
 LOG_NAME = 'run_name' # Name of log used for model saving, mlflow run name and tensorboard log
-DATASET_PATH = '/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/processed_segmentation_dataset'
-LOG_DIR = f"/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/runs"
+DATASET_PATH = ''
+LOG_DIR = f'runs'
 
 LOSS_FUNCTION = torch.nn.BCELoss # Can be changed to DiceLoss or any other loss function
 
