@@ -127,6 +127,9 @@ def train(train_dataset, val_dataset, epochs, generator_model):
     torch.save(optimizer.state_dict(), os.path.join(CHECKPOINT_DIR, f"{LOG_NAME}_adam_final.pth"))
 
 def main():
+    if not os.path.exists(CHECKPOINT_DIR):
+        os.makedirs(CHECKPOINT_DIR)
+
     train_dataset = DRSegmentationDataset(os.path.join(DATASET_DIR, 'train_set'))
     val_dataset = DRSegmentationDataset(os.path.join(DATASET_DIR, 'val_set'))
 
