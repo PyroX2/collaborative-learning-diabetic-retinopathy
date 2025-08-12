@@ -7,7 +7,7 @@ from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from tqdm import tqdm
 import mlflow
-from segmentation.utils import log_class_metrics, memory_stats, calculate_mask_metrics
+from segmentation.utils import log_class_metrics, calculate_mask_metrics
 import os
 
 
