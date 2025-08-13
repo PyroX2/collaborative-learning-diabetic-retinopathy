@@ -66,11 +66,11 @@ def validate(grading_model, validation_dataloader, criterion):
             target_batch = target_batch.to(device).to(torch.float32)
 
             logits = grading_model(input_batch)
-            logits = F.sigmoid(logits.squeeze())  # Remove the extra dimension for binary classification
+            output = F.sigmoid(logits.squeeze())  # Remove the extra dimension for binary classification
 
-            loss = criterion(logits, target_batch)
+            loss = criterion(output, target_batch)
 
-            predicted_values += logits.cpu().detach().tolist()
+            predicted_values += output.cpu().detach().tolist()
 
             targets += target_batch.cpu().detach().tolist()
 
@@ -80,6 +80,7 @@ def validate(grading_model, validation_dataloader, criterion):
             del input_batch
             del target_batch
             del logits
+            del output
             torch.cuda.empty_cache()
 
         mean_validation_loss = validation_loss / len(validation_dataloader)
@@ -120,9 +121,9 @@ def train(grading_model, train_dataloader, validation_dataloader, optimizer, cri
             target_batch = target_batch.to(device).to(torch.float32)
 
             logits = grading_model(input_batch)
-            logits = F.sigmoid(logits.squeeze())  # Remove the extra dimension for binary classification
+            output = F.sigmoid(logits.squeeze())  # Remove the extra dimension for binary classification
 
-            loss = criterion(logits, target_batch)
+            loss = criterion(output, target_batch)
             training_loss += loss.detach().item()
             loss.backward()
             optimizer.step()
@@ -131,6 +132,7 @@ def train(grading_model, train_dataloader, validation_dataloader, optimizer, cri
         del target_batch
         del logits
         del loss
+        del output
         torch.cuda.empty_cache()
 
         mean_training_loss = training_loss / len(train_dataloader) / BATCH_SIZE
