@@ -47,13 +47,12 @@ validation_dataloader = DataLoader(validation_dataset, BATCH_SIZE, shuffle=True,
 test_dataset = DataLoader(test_dataset, BATCH_SIZE, shuffle=False, num_workers=42)
 train_metrics_dataloader = DataLoader(train_metrics_dataset, BATCH_SIZE, shuffle=False, num_workers=42)
 
-grading_model = GradingModel()
+grading_model = GradingModel(num_lesions=1)
 grading_model.to(device)
 
 optimizer = torch.optim.Adam(grading_model.parameters(), lr=LEARNING_RATE)
 
-criterion = torch.nn.CrossEntropyLoss()
-
+criterion = torch.nn.BCELoss()
 
 def validate(grading_model, validation_dataloader, criterion):
         validation_loss = 0
@@ -64,23 +63,16 @@ def validate(grading_model, validation_dataloader, criterion):
         grading_model.eval()
         for input_batch, target_batch in validation_dataloader:
             input_batch = input_batch.to(device)
-            target_batch = target_batch.to(device)
+            target_batch = target_batch.to(device).to(torch.float32)
 
             logits, f_low, f_high, _ = grading_model(input_batch)
+            output = F.sigmoid(logits.squeeze())
 
-            loss = criterion(logits, target_batch)
+            loss = criterion(output, target_batch)
 
-            normalized_output = torch.softmax(logits, dim=-1)
+            predicted_values += output.cpu().detach().tolist()
 
-            if normalized_output.shape[0] == 1:
-                predicted_values += normalized_output.cpu().detach().tolist()
-            else:
-                predicted_values += normalized_output.squeeze().cpu().detach().tolist()
-
-            if len(target_batch.shape) == 1:
-                targets += target_batch.cpu().detach().tolist()
-            else:
-                targets += target_batch.squeeze().cpu().detach().tolist()
+            targets += target_batch.cpu().detach().tolist()
 
             validation_loss += loss.detach().item()
 
@@ -89,7 +81,7 @@ def validate(grading_model, validation_dataloader, criterion):
             del target_batch
             del logits
             del f_high
-            del normalized_output
+            del output
             torch.cuda.empty_cache()
 
         mean_validation_loss = validation_loss / len(validation_dataloader)
@@ -97,19 +89,19 @@ def validate(grading_model, validation_dataloader, criterion):
         predicted_values = torch.tensor(predicted_values)
         targets = torch.tensor(targets)
 
-        f1_metric = MulticlassF1Score(num_classes=5)
+        f1_metric = BinaryF1Score()
         f1_metric.update(predicted_values, targets)
         f1_score = f1_metric.compute()
 
-        accuracy_metric = MulticlassAccuracy(num_classes=5)
+        accuracy_metric = BinaryAccuracy()
         accuracy_metric.update(predicted_values, targets)
         accuracy_score = accuracy_metric.compute()
         
-        auprc_metric = MulticlassAUPRC(num_classes=5)
+        auprc_metric = BinaryAUPRC()
         auprc_metric.update(predicted_values, targets)
         auprc_score = auprc_metric.compute()
 
-        auroc_metric = MulticlassAUROC(num_classes=5)
+        auroc_metric = BinaryAUROC()
         auroc_metric.update(predicted_values, targets)
         auroc_score = auroc_metric.compute()
 
@@ -127,11 +119,12 @@ def train(grading_model, train_dataloader, validation_dataloader, optimizer, cri
             optimizer.zero_grad()
 
             input_batch = input_batch.to(device)
-            target_batch = target_batch.to(device)
+            target_batch = target_batch.to(device).to(torch.float32)
 
             logits, f_low, f_high, _ = grading_model(input_batch)
+            output = F.sigmoid(logits.squeeze())
 
-            loss = criterion(logits, target_batch)
+            loss = criterion(output, target_batch)
             training_loss += loss.detach().item()
             loss.backward()
             optimizer.step()
@@ -141,6 +134,7 @@ def train(grading_model, train_dataloader, validation_dataloader, optimizer, cri
         del logits
         del f_high
         del loss
+        del output
         torch.cuda.empty_cache()
 
         mean_training_loss = training_loss / len(train_dataloader) / BATCH_SIZE
