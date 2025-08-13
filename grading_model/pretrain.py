@@ -175,6 +175,7 @@ def train(grading_model, train_dataloader, validation_dataloader, optimizer, cri
         if mean_validation_loss < best_validation_loss:
             best_validation_loss = mean_validation_loss
             torch.save(grading_model.state_dict(), f"/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/checkpoints/classification/{LOG_NAME}_best.pth")
+            torch.save(optimizer.state_dict(), f"/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/checkpoints/classification/{LOG_NAME}_optimizer_best.pth")
 
         print(f"Epoch: {epoch}, Mean training loss: {mean_training_loss}, Mean validation loss: {mean_validation_loss}")
 
@@ -189,5 +190,6 @@ else:
     train(grading_model, train_dataloader, validation_dataloader, optimizer, criterion, 100)
 
 torch.save(grading_model.state_dict(), f"/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/classification/{LOG_NAME}_last.pth")
+torch.save(optimizer.state_dict(), f"/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/classification/{LOG_NAME}_optimizer_last.pth")
 
 
