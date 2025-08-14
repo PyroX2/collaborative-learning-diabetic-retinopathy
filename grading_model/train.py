@@ -20,15 +20,19 @@ torch.manual_seed(0)
 BATCH_SIZE = 16
 MLFLOW = True
 TENSORBOARD = True
-LOG_NAME = "attentive_grading_model_train_unet_unfreezed"
+LOG_NAME = "attentive_grading_model_train"
 NUM_EPOCHS = 100
+
+OPTIMIZER_STATE_DICT = ''
+GRADING_MODEL_STATE_DICT = ''
+SEGMENTATION_MODEL_STATE_DICT = ''
+CHECKPOINT_DIR = ''
+DATASET_PATH = ''
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 if TENSORBOARD:
     writer = SummaryWriter(f"runs/{LOG_NAME}")
-
-# Training with mask generator
 
 def validate(grading_model, grading_model_pretrained, segmentation_model, validation_dataloader, criterion, epoch=None):
         validation_loss = 0
@@ -157,11 +161,6 @@ def train(grading_model, grading_model_pretrained, segmentation_model, train_dat
 
         mean_training_loss = epoch_loss / len(train_dataloader) / BATCH_SIZE
 
-        if mean_validation_loss < best_validation_loss:
-            best_validation_loss = mean_validation_loss
-            torch.save(grading_model.state_dict(), "grading_model_with_masks_ckpt.pth")
-            best_model_state_dict = grading_model.state_dict()
-
         if TENSORBOARD:
             writer.add_scalar("train/Loss", mean_training_loss, epoch)
             writer.add_scalar("train/Accuracy", train_accuracy_score, epoch)
@@ -186,13 +185,21 @@ def train(grading_model, grading_model_pretrained, segmentation_model, train_dat
             mlflow.log_metric("validation/F1 Score", validation_f1_score, epoch)
             mlflow.log_metric("validation/AUPRC", validation_auprc_score, epoch)
             mlflow.log_metric("validation/AUROC", validation_auroc_score, epoch)
+
+        if mean_validation_loss < best_validation_loss:
+            best_validation_loss = mean_validation_loss
+            torch.save(grading_model.state_dict(), os.path.join(CHECKPOINT_DIR, f"{LOG_NAME}_best.pth"))
+            best_model_state_dict = grading_model.state_dict()
             
         print(f"Epoch: {epoch}, Mean training loss: {mean_training_loss}, Mean validation loss: {mean_validation_loss}")
 
-    if best_model_state_dict is not None:
-        grading_model.load_state_dict(best_model_state_dict)
+    torch.save(grading_model.state_dict(), os.path.join(CHECKPOINT_DIR, f"{LOG_NAME}_final.pth"))
+
 
 def main():
+    if not os.path.exists(CHECKPOINT_DIR):
+        os.makedirs(CHECKPOINT_DIR)
+
     transform = v2.Compose([
         v2.ToImage(), 
         v2.ToDtype(torch.float32, scale=True), 
@@ -206,9 +213,9 @@ def main():
         v2.Resize((640, 640))])
 
     # Kaggle Joined dataset
-    train_root = "/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/eyepacs-aptos-messidor-diabetic-retinopathy-preprocessed/train"
-    validation_root = "/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/eyepacs-aptos-messidor-diabetic-retinopathy-preprocessed/val"
-    test_root = "/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/eyepacs-aptos-messidor-diabetic-retinopathy-preprocessed/test"
+    train_root = os.path.join({DATASET_PATH}, "train")
+    validation_root = os.path.join({DATASET_PATH}, "val")
+    test_root = os.path.join({DATASET_PATH}, "test")
 
     train_dataset = ImageFolder(train_root, transform=transform)
     validation_dataset = ImageFolder(validation_root, transform=test_images_transform)
@@ -223,25 +230,25 @@ def main():
 
     grading_model_pretrained = GradingModel()
     grading_model_pretrained.to(device)
-    grading_model_pretrained.load_state_dict(torch.load("/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/classification/grading_model_pretrained.pth", weights_only=True, map_location=device))
+    grading_model_pretrained.load_state_dict(torch.load(GRADING_MODEL_STATE_DICT, weights_only=True, map_location=device))
 
     grading_model = GradingModel()
     grading_model.to(device)
-    grading_model.load_state_dict(torch.load("/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/classification/grading_model_pretrained.pth", weights_only=True, map_location=device))
+    grading_model.load_state_dict(torch.load(GRADING_MODEL_STATE_DICT, weights_only=True, map_location=device))
 
     segmentation_model = UNet(3, 5)
     segmentation_model.to(device)
-    segmentation_model.load_state_dict(torch.load("/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/segmentation/pretrained/unet_pretrained.pth", weights_only=True, map_location=device))
+    segmentation_model.load_state_dict(torch.load(SEGMENTATION_MODEL_STATE_DICT, weights_only=True, map_location=device))
 
     optimizer = torch.optim.Adam(grading_model.parameters(), lr=1e-5)
+    optimizer.load_state_dict(torch.load(OPTIMIZER_STATE_DICT, map_location=device))
 
     criterion = torch.nn.CrossEntropyLoss()
         
     if MLFLOW:
+        mlflow.set_experiment("attentive-model-training")
         with mlflow.start_run(run_name=LOG_NAME):
             train(grading_model, grading_model_pretrained, segmentation_model, train_dataloader, train_metrics_dataloader, validation_dataloader, optimizer, criterion, NUM_EPOCHS)
-
-            torch.save(grading_model.state_dict(), "grading_model_fine_tuned.pth")
 
             # Obtain data for creating signatures for models logging into mlflow
             x_test, y_test = next(iter(test_dataloader))
@@ -266,9 +273,6 @@ def main():
             mlflow.pytorch.log_model(segmentation_model, registered_model_name="segmentation_model_grading_fine_tune", signature=segmentation_model_signature)
     else:
         train(grading_model, grading_model_pretrained, segmentation_model, train_dataloader, train_metrics_dataloader, validation_dataloader, optimizer, criterion, NUM_EPOCHS)
-
-    torch.save(grading_model.state_dict(), "grading_model_fine_tuned.pth")
-
 
 if __name__ == '__main__':
     main()
