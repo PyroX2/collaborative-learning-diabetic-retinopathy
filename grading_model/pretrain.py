@@ -3,12 +3,12 @@ from grading_model.grading_model import GradingModel
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, random_split
-from torcheval.metrics import MulticlassAccuracy, MulticlassAUPRC, MulticlassAUROC, MulticlassF1Score
+from torcheval.metrics import BinaryAccuracy, BinaryAUPRC, BinaryAUROC, BinaryF1Score
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.datasets import ImageFolder
 from torchvision.transforms import v2
 from tqdm import tqdm
-
+import torch.nn.functional as F
 import mlflow
 
 torch.manual_seed(0)
@@ -32,20 +32,17 @@ if USE_MLFLOW:
 if USE_TENSORBOARD:
     writer = SummaryWriter(f"/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/runs/{LOG_NAME}")
 
-train_root = "/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/eyepacs-aptos-messidor-diabetic-retinopathy-original-preprocessed-no-color-enhancement/train"
-validation_root = "/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/eyepacs-aptos-messidor-diabetic-retinopathy-original-preprocessed-no-color-enhancement/val"
-test_root = "/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/eyepacs-aptos-messidor-diabetic-retinopathy-original-preprocessed-no-color-enhancement/test"
+train_root = "/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/eyepacs-aptos-messidor-diabetic-retinopathy-original-preprocessed-color-enhancement/train/two_classes"
+validation_root = "/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/eyepacs-aptos-messidor-diabetic-retinopathy-original-preprocessed-color-enhancement/val/two_classes"
 
 train_dataset = ImageFolder(train_root, transform=transform)
 validation_dataset = ImageFolder(validation_root, transform=transform)
-test_dataset = ImageFolder(test_root, transform=transform)
 
 _, train_metrics_dataset = random_split(train_dataset, [0.95, 0.05])
 
-train_dataloader = DataLoader(train_dataset, BATCH_SIZE, shuffle=True, num_workers=42)
-validation_dataloader = DataLoader(validation_dataset, BATCH_SIZE, shuffle=True, num_workers=42)
-test_dataset = DataLoader(test_dataset, BATCH_SIZE, shuffle=False, num_workers=42)
-train_metrics_dataloader = DataLoader(train_metrics_dataset, BATCH_SIZE, shuffle=False, num_workers=42)
+train_dataloader = DataLoader(train_dataset, BATCH_SIZE, shuffle=True, num_workers=32)
+validation_dataloader = DataLoader(validation_dataset, BATCH_SIZE, shuffle=True, num_workers=32)
+train_metrics_dataloader = DataLoader(train_metrics_dataset, BATCH_SIZE, shuffle=False, num_workers=32)
 
 grading_model = GradingModel(num_lesions=1)
 grading_model.to(device)
