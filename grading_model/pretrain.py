@@ -44,7 +44,7 @@ train_dataloader = DataLoader(train_dataset, BATCH_SIZE, shuffle=True, num_worke
 validation_dataloader = DataLoader(validation_dataset, BATCH_SIZE, shuffle=True, num_workers=32)
 train_metrics_dataloader = DataLoader(train_metrics_dataset, BATCH_SIZE, shuffle=False, num_workers=32)
 
-grading_model = GradingModel(num_lesions=1)
+grading_model = GradingModel(num_lesions=4, num_outputs=1)
 grading_model.to(device)
 
 optimizer = torch.optim.Adam(grading_model.parameters(), lr=LEARNING_RATE)

@@ -5,7 +5,7 @@ from typing import Tuple
 
 
 class GradingModel(nn.Module):
-    def __init__(self, num_lesions=5):
+    def __init__(self, num_outputs=5, num_lesions=4):
         super().__init__()
 
         self.num_lesions = num_lesions
@@ -40,7 +40,7 @@ class GradingModel(nn.Module):
                                             nn.BatchNorm2d(1024)
                                         )
         
-        self.fc = nn.Linear(1024, num_lesions)
+        self.fc = nn.Linear(1024, num_outputs)
 
         # Uses grouping so that each lesion has its own set of weights
         self.mask_preprocess_seq = nn.Sequential(nn.Conv2d(num_lesions, num_lesions*8, (3, 3), padding='same', groups=num_lesions),
