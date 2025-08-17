@@ -25,11 +25,11 @@ NUM_EPOCHS = 100
 NUM_LESIONS = 4
 NUM_OUTPUTS = 1 # Number of outputs in grading model. 1 when used for binary classification
 
-OPTIMIZER_STATE_DICT = '/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/checkpoints/classification/grading_model_pretrain_two_classes_optimizer_best.pth'
-GRADING_MODEL_STATE_DICT = '/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/checkpoints/classification/grading_model_pretrain_two_classes_best.pth'
-SEGMENTATION_MODEL_STATE_DICT = '/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/segmentation/segmentation_generator.pth'
-CHECKPOINT_DIR = '/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/checkpoints/classification/attentive_model_train'
-DATASET_PATH = '/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/eyepacs-aptos-messidor-diabetic-retinopathy-original-preprocessed-color-enhancement'
+OPTIMIZER_STATE_DICT = ''
+GRADING_MODEL_STATE_DICT = ''
+SEGMENTATION_MODEL_STATE_DICT = ''
+CHECKPOINT_DIR = ''
+DATASET_PATH = ''
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -37,87 +37,87 @@ if TENSORBOARD:
     writer = SummaryWriter(f"runs/{LOG_NAME}")
 
 def validate(grading_model, grading_model_pretrained, segmentation_model, validation_dataloader, criterion, epoch=None):
-        validation_loss = 0
+    validation_loss = 0
 
-        predicted_values = []
-        targets = []
+    predicted_values = []
+    targets = []
 
-        grading_model.eval()
-        grading_model_pretrained.eval()
-        segmentation_model.eval()
-        with torch.no_grad():
-            for batch_index, (input_batch, target_batch) in tqdm(enumerate(validation_dataloader)):
-                input_batch = input_batch.to(device)
-                target_batch = target_batch.to(device).to(torch.float32)
+    grading_model.eval()
+    grading_model_pretrained.eval()
+    segmentation_model.eval()
+    with torch.no_grad():
+        for batch_index, (input_batch, target_batch) in tqdm(enumerate(validation_dataloader)):
+            input_batch = input_batch.to(device)
+            target_batch = target_batch.to(device).to(torch.float32)
 
-                masks = segmentation_model(input_batch)
-                masks = torch.cat((masks[:, :3], masks[:, 4:]), dim=1) # Drop optic disc if applicable
-                pretrained_logits, pretrained_f_low, pretrained_f_high, _ = grading_model_pretrained(input_batch)
+            masks = segmentation_model(input_batch)
+            masks = torch.cat((masks[:, :3], masks[:, 4:]), dim=1) # Drop optic disc if applicable
+            pretrained_logits, pretrained_f_low, pretrained_f_high, _ = grading_model_pretrained(input_batch)
 
-                logits, _, _, attention_maps = grading_model(input_batch, masks, pretrained_f_low, pretrained_f_high)
-                output = F.sigmoid(logits).squeeze(-1)
+            logits, _, _, attention_maps = grading_model(input_batch, masks, pretrained_f_low, pretrained_f_high)
+            output = F.sigmoid(logits).squeeze(-1)
 
-                if epoch is not None and epoch % 1 == 0 and batch_index == 0:
-                    reference_image = input_batch[0].cpu().detach().numpy()
-                    reference_image = reference_image.transpose(1, 2, 0)
+            if epoch is not None and epoch % 1 == 0 and batch_index == 0:
+                reference_image = input_batch[0].cpu().detach().numpy()
+                reference_image = reference_image.transpose(1, 2, 0)
 
-                    # TODO: Add min max scaling
-                    reference_image = (reference_image * 255).astype('uint8')
-                    if not os.path.exists("output_masks"):
-                        os.makedirs("output_masks")
-                    cv2.imwrite("output_masks/reference_image.png", reference_image)
-                    
-                    for i in range(NUM_LESIONS):
-                        attention_map = attention_maps[0, i].cpu().detach().numpy()
-                        print(f"{attention_map.min()}, {attention_map.max()}")
-                        attention_map = (attention_map * 255).astype('uint8')
-
-                        mask = masks[0][i].cpu().detach().numpy()
-                        mask = (mask*255).astype('uint8')
-
-                        output_path = f"output_masks/mask_{i}/"
-                        if not os.path.exists(output_path):
-                            os.makedirs(output_path)
-                        cv2.imwrite(os.path.join(output_path, f"mask_{epoch}.png"), attention_map)
-                        cv2.imwrite(os.path.join(output_path, f"mask_generator.png"), mask)
+                # TODO: Add min max scaling
+                reference_image = (reference_image * 255).astype('uint8')
+                if not os.path.exists("output_masks"):
+                    os.makedirs("output_masks")
+                cv2.imwrite("output_masks/reference_image.png", reference_image)
                 
-                loss = criterion(output, target_batch)
+                for i in range(NUM_LESIONS):
+                    attention_map = attention_maps[0, i].cpu().detach().numpy()
+                    print(f"{attention_map.min()}, {attention_map.max()}")
+                    attention_map = (attention_map * 255).astype('uint8')
 
-                predicted_values.extend(output.cpu().detach().tolist())
-                
-                
-                if len(target_batch) > 1:
-                    targets += target_batch.squeeze().cpu().detach().tolist()
-                else:
-                    targets.append(target_batch[0].cpu().detach().item())
+                    mask = masks[0][i].cpu().detach().numpy()
+                    mask = (mask*255).astype('uint8')
 
-                validation_loss += loss.detach().item()
+                    output_path = f"output_masks/mask_{i}/"
+                    if not os.path.exists(output_path):
+                        os.makedirs(output_path)
+                    cv2.imwrite(os.path.join(output_path, f"mask_{epoch}.png"), attention_map)
+                    cv2.imwrite(os.path.join(output_path, f"mask_generator.png"), mask)
+            
+            loss = criterion(output, target_batch)
 
-                del input_batch, target_batch, masks, logits, attention_maps, loss, output
-                torch.cuda.empty_cache()
+            predicted_values.extend(output.cpu().detach().tolist())
+            
+            
+            if len(target_batch) > 1:
+                targets += target_batch.squeeze().cpu().detach().tolist()
+            else:
+                targets.append(target_batch[0].cpu().detach().item())
 
-        mean_validation_loss = validation_loss / len(validation_dataloader)
+            validation_loss += loss.detach().item()
 
-        predicted_values = torch.tensor(predicted_values)
-        targets = torch.tensor(targets)
+            del input_batch, target_batch, masks, logits, attention_maps, loss, output
+            torch.cuda.empty_cache()
 
-        f1_metric = BinaryF1Score()
-        f1_metric.update(predicted_values, targets)
-        f1_score = f1_metric.compute()
+    mean_validation_loss = validation_loss / len(validation_dataloader)
 
-        accuracy_metric = BinaryAccuracy()
-        accuracy_metric.update(predicted_values, targets)
-        accuracy_score = accuracy_metric.compute()
-        
-        auprc_metric = BinaryAUPRC()
-        auprc_metric.update(predicted_values, targets)
-        auprc_score = auprc_metric.compute()
+    predicted_values = torch.tensor(predicted_values)
+    targets = torch.tensor(targets)
 
-        auroc_metric = BinaryAUROC()
-        auroc_metric.update(predicted_values, targets)
-        auroc_score = auroc_metric.compute()
+    f1_metric = BinaryF1Score()
+    f1_metric.update(predicted_values, targets)
+    f1_score = f1_metric.compute()
 
-        return mean_validation_loss, accuracy_score, f1_score, auprc_score, auroc_score
+    accuracy_metric = BinaryAccuracy()
+    accuracy_metric.update(predicted_values, targets)
+    accuracy_score = accuracy_metric.compute()
+    
+    auprc_metric = BinaryAUPRC()
+    auprc_metric.update(predicted_values, targets)
+    auprc_score = auprc_metric.compute()
+
+    auroc_metric = BinaryAUROC()
+    auroc_metric.update(predicted_values, targets)
+    auroc_score = auroc_metric.compute()
+
+    return mean_validation_loss, accuracy_score, f1_score, auprc_score, auroc_score
 
 def train(grading_model, grading_model_pretrained, segmentation_model, train_dataloader, train_metrics_dataloader, validation_dataloader, optimizer, criterion, n_epochs):
     best_validation_loss = float("inf")
