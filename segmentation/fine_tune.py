@@ -12,7 +12,12 @@ import os
 from segmentation.utils import log_class_metrics, calculate_mask_metrics
 
 
-# Different batch sizes because in fine tuning discriminator is used so more VRAM is used
+# Set manual seed for reproducibility
+torch.manual_seed(0)
+np.random.seed(0)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
 BATCH_SIZE = 2
 
 LEARNING_RATE = 0.0002 # Learning rate for generator used in every stage
@@ -38,10 +43,6 @@ if USE_TENSORBOARD:
     writer = SummaryWriter(log_dir=f"runs/{LOG_NAME}")
 if USE_MLFLOW:
     mlflow.set_tracking_uri("http://localhost:5000")
-
-# Set manual seed for reproducibility
-torch.manual_seed(0)
-np.random.seed(0)
 
 # Function for measuring discriminator performance
 def discriminator_validation(validation_px_dataloader, validation_image_level_dataloader, generator_model, discriminator_model):

@@ -12,7 +12,11 @@ from torchvision.models import resnet50, ResNet50_Weights
 import mlflow
 import torch.nn.functional as F
 
+
+# Set manual seed for reproducibility
 torch.manual_seed(0)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 
 BATCH_SIZE = 64

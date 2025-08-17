@@ -11,6 +11,12 @@ from segmentation.utils import log_class_metrics, calculate_mask_metrics
 import os
 
 
+# Set manual seed for reproducibility
+torch.manual_seed(0)
+np.random.seed(0)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
 # Different batch sizes because in fine tuning discriminator is used so more VRAM is used
 BATCH_SIZE = 8
 EPOCHS = 2
@@ -37,10 +43,6 @@ if USE_TENSORBOARD:
     writer = SummaryWriter(log_dir=os.path.join(LOG_DIR, LOG_NAME))
 if USE_MLFLOW:
     mlflow.set_tracking_uri("http://localhost:5000")
-
-# Set manual seed for reproducibility
-torch.manual_seed(0)
-np.random.seed(0)
 
 train_dataset = DRSegmentationDataset(os.path.join(DATASET_PATH, 'train_set'))
 test_dataset = DRSegmentationDataset(os.path.join(DATASET_PATH, 'test_set'))

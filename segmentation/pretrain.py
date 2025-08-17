@@ -9,6 +9,11 @@ import mlflow
 from segmentation.utils import calculate_mask_metrics, log_class_metrics
 import os
 
+# Set manual seed for reproducibility
+torch.manual_seed(0)
+np.random.seed(0)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 # Different batch sizes because in fine tuning discriminator is used so more VRAM is used
 BATCH_SIZE = 8
@@ -39,10 +44,6 @@ if USE_TENSORBOARD:
     writer = SummaryWriter(log_dir=f"runs/{LOG_NAME}")
 if USE_MLFLOW:
     mlflow.set_tracking_uri("http://localhost:5000")
-
-# Set manual seed for reproducibility
-torch.manual_seed(0)
-np.random.seed(0)
 
 
 def train(train_dataset, val_dataset, epochs, generator_model):
