@@ -58,7 +58,7 @@ def validate(grading_model, validation_dataloader, criterion):
         targets = []
 
         grading_model.eval()
-        for input_batch, target_batch in validation_dataloader:
+        for input_batch, target_batch in tqdm(validation_dataloader):
             input_batch = input_batch.to(device)
             target_batch = target_batch.to(device).to(torch.float32)
 
