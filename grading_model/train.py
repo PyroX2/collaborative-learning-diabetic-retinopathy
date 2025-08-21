@@ -26,7 +26,7 @@ LOG_NAME = "attentive_grading_model_train"
 NUM_EPOCHS = 100
 
 NUM_LESIONS = 4
-NUM_OUTPUTS = 1 # Number of outputs in grading model. 1 when used for binary classification
+NUM_OUTPUTS = 5 # Number of outputs in grading model. 1 when used for binary classification
 
 OPTIMIZER_STATE_DICT = ''
 GRADING_MODEL_STATE_DICT = ''
