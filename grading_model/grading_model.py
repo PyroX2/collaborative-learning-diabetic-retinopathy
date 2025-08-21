@@ -91,9 +91,13 @@ class GradingModel(nn.Module):
             logits, f_high = self.logits_from_flow(f_low)
             return logits, f_low, f_high, None
         else:
+            # After preprocessing masks features are stacked by mask class. So features for the first mask are 0-15, for second mask 16-31 etc. 
             preprocessed_masks = self.mask_preprocess_seq(masks) # Shape [BATCH SIZE x 16*num_lesions x 640 x 640]
+
+            # Split masks features by their class. At this point features for one mask can be iterated on third dimension
             preprocessed_masks = torch.reshape(preprocessed_masks, (preprocessed_masks.shape[0], self.num_lesions, int(preprocessed_masks.shape[1]/self.num_lesions), preprocessed_masks.shape[2], preprocessed_masks.shape[3])) # Shape [BATCH SIZE x num_lesions x 16 x 640 x 640]
 
+            # Duplicate f_low for every mask. Features are dupliacted on 2nd dimension
             f_low_expanded = f_low.unsqueeze(1).expand(-1, self.num_lesions, -1, -1, -1)  # Expand the shape to allow concatenation
 
             # Concatenate masks with f_low, output shape is [BATCH SIZE x num_lesions, 48 x 640 x 640]

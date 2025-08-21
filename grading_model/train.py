@@ -1,7 +1,7 @@
 from grading_model.grading_model import GradingModel
 import torch
 from torch.utils.data import DataLoader, random_split
-from torcheval.metrics import BinaryAccuracy, BinaryAUPRC, BinaryAUROC, BinaryF1Score
+from torcheval.metrics import MulticlassAccuracy, MulticlassAUPRC, MulticlassAUROC, MulticlassF1Score
 from torch.utils.tensorboard import SummaryWriter
 import cv2
 from tqdm import tqdm
@@ -51,14 +51,13 @@ def validate(grading_model, grading_model_pretrained, segmentation_model, valida
     with torch.no_grad():
         for batch_index, (input_batch, target_batch) in tqdm(enumerate(validation_dataloader)):
             input_batch = input_batch.to(device)
-            target_batch = target_batch.to(device).to(torch.float32)
+            target_batch = target_batch.to(device)
 
             masks = segmentation_model(input_batch)
             masks = torch.cat((masks[:, :3], masks[:, 4:]), dim=1) # Drop optic disc if applicable
             pretrained_logits, pretrained_f_low, pretrained_f_high, _ = grading_model_pretrained(input_batch)
 
             logits, _, _, attention_maps = grading_model(input_batch, masks, pretrained_f_low, pretrained_f_high)
-            output = F.sigmoid(logits).squeeze(-1)
 
             if epoch is not None and epoch % 1 == 0 and batch_index == 0:
                 reference_image = input_batch[0].cpu().detach().numpy()
@@ -84,9 +83,9 @@ def validate(grading_model, grading_model_pretrained, segmentation_model, valida
                     cv2.imwrite(os.path.join(output_path, f"mask_{epoch}.png"), attention_map)
                     cv2.imwrite(os.path.join(output_path, f"mask_generator.png"), mask)
             
-            loss = criterion(output, target_batch)
+            loss = criterion(logits, target_batch)
 
-            predicted_values.extend(output.cpu().detach().tolist())
+            predicted_values.extend(logits.cpu().detach().tolist())
             
             
             if len(target_batch) > 1:
@@ -96,7 +95,7 @@ def validate(grading_model, grading_model_pretrained, segmentation_model, valida
 
             validation_loss += loss.detach().item()
 
-            del input_batch, target_batch, masks, logits, attention_maps, loss, output
+            del input_batch, target_batch, masks, logits, attention_maps, loss
             torch.cuda.empty_cache()
 
     mean_validation_loss = validation_loss / len(validation_dataloader)
@@ -104,19 +103,19 @@ def validate(grading_model, grading_model_pretrained, segmentation_model, valida
     predicted_values = torch.tensor(predicted_values)
     targets = torch.tensor(targets)
 
-    f1_metric = BinaryF1Score()
+    f1_metric = MulticlassF1Score(num_classes=5)
     f1_metric.update(predicted_values, targets)
     f1_score = f1_metric.compute()
 
-    accuracy_metric = BinaryAccuracy()
+    accuracy_metric = MulticlassAccuracy(num_classes=5)
     accuracy_metric.update(predicted_values, targets)
     accuracy_score = accuracy_metric.compute()
     
-    auprc_metric = BinaryAUPRC()
+    auprc_metric = MulticlassAUPRC(num_classes=5)
     auprc_metric.update(predicted_values, targets)
     auprc_score = auprc_metric.compute()
 
-    auroc_metric = BinaryAUROC()
+    auroc_metric = MulticlassAUROC(num_classes=5)
     auroc_metric.update(predicted_values, targets)
     auroc_score = auroc_metric.compute()
 
@@ -134,7 +133,7 @@ def train(grading_model, grading_model_pretrained, segmentation_model, train_dat
             optimizer.zero_grad()
 
             input_batch = input_batch.to(device)
-            target_batch = target_batch.to(device).to(torch.float32)
+            target_batch = target_batch.to(device)
 
             with torch.no_grad():
                 masks = segmentation_model(input_batch)
@@ -146,21 +145,15 @@ def train(grading_model, grading_model_pretrained, segmentation_model, train_dat
                 pretrained_f_high = pretrained_f_high.detach()
 
             logits, _, _, attention_maps = grading_model(input_batch, masks, pretrained_f_low, pretrained_f_high)
-            output = F.sigmoid(logits).squeeze(-1)
 
-            loss = criterion(output, target_batch)
+            loss = criterion(logits, target_batch)
 
             epoch_loss += loss.detach().item()
 
             loss.backward()
             optimizer.step()
 
-        del input_batch
-        del target_batch
-        del masks
-        del logits
-        del attention_maps
-        del output
+        del input_batch, target_batch, masks, logits, attention_maps
         torch.cuda.empty_cache()
         
         _, train_accuracy_score, train_f1_score, train_auprc_score, train_auroc_score = validate(grading_model, grading_model_pretrained, segmentation_model, train_metrics_dataloader, criterion)
@@ -246,7 +239,7 @@ def main():
     optimizer = torch.optim.Adam(grading_model.parameters(), lr=1e-5)
     optimizer.load_state_dict(torch.load(OPTIMIZER_STATE_DICT, map_location=device))
 
-    criterion = torch.nn.BCELoss()
+    criterion = torch.nn.CrossEntropyLoss()
         
     if MLFLOW:
         mlflow.set_tracking_uri("http://localhost:5000")

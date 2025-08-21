@@ -3,7 +3,7 @@ from grading_model.grading_model import GradingModel
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, random_split
-from torcheval.metrics import BinaryAccuracy, BinaryAUPRC, BinaryAUROC, BinaryF1Score
+from torcheval.metrics import MulticlassAccuracy, MulticlassAUPRC, MulticlassAUROC, MulticlassF1Score
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.datasets import ImageFolder
 from torchvision.transforms import v2
@@ -56,7 +56,7 @@ grading_model.to(device)
 
 optimizer = torch.optim.Adam(grading_model.parameters(), lr=LEARNING_RATE)
 
-criterion = torch.nn.BCELoss()
+criterion = torch.nn.CrossEntropyLoss()
 
 def validate(grading_model, validation_dataloader, criterion):
         validation_loss = 0
@@ -67,24 +67,19 @@ def validate(grading_model, validation_dataloader, criterion):
         grading_model.eval()
         for input_batch, target_batch in tqdm(validation_dataloader):
             input_batch = input_batch.to(device)
-            target_batch = target_batch.to(device).to(torch.float32)
+            target_batch = target_batch.to(device)
 
             logits = grading_model(input_batch)
-            output = F.sigmoid(logits.squeeze())  # Remove the extra dimension for binary classification
 
-            loss = criterion(output, target_batch)
+            loss = criterion(logits, target_batch)
 
-            predicted_values += output.cpu().detach().tolist()
+            predicted_values += logits.cpu().detach().tolist()
 
             targets += target_batch.cpu().detach().tolist()
 
             validation_loss += loss.detach().item()
 
-            del loss
-            del input_batch
-            del target_batch
-            del logits
-            del output
+            del loss, input_batch, target_batch, logits
             torch.cuda.empty_cache()
 
         mean_validation_loss = validation_loss / len(validation_dataloader)
@@ -92,19 +87,19 @@ def validate(grading_model, validation_dataloader, criterion):
         predicted_values = torch.tensor(predicted_values)
         targets = torch.tensor(targets)
 
-        f1_metric = BinaryF1Score()
+        f1_metric = MulticlassF1Score(num_classes=5)
         f1_metric.update(predicted_values, targets)
         f1_score = f1_metric.compute()
 
-        accuracy_metric = BinaryAccuracy()
+        accuracy_metric = MulticlassAccuracy(num_classes=5)
         accuracy_metric.update(predicted_values, targets)
         accuracy_score = accuracy_metric.compute()
         
-        auprc_metric = BinaryAUPRC()
+        auprc_metric = MulticlassAUPRC(num_classes=5)
         auprc_metric.update(predicted_values, targets)
         auprc_score = auprc_metric.compute()
 
-        auroc_metric = BinaryAUROC()
+        auroc_metric = MulticlassAUROC(num_classes=5)
         auroc_metric.update(predicted_values, targets)
         auroc_score = auroc_metric.compute()
 
@@ -122,21 +117,16 @@ def train(grading_model, train_dataloader, validation_dataloader, optimizer, cri
             optimizer.zero_grad()
 
             input_batch = input_batch.to(device)
-            target_batch = target_batch.to(device).to(torch.float32)
+            target_batch = target_batch.to(device)
 
             logits = grading_model(input_batch)
-            output = F.sigmoid(logits.squeeze())  # Remove the extra dimension for binary classification
 
-            loss = criterion(output, target_batch)
+            loss = criterion(logits, target_batch)
             training_loss += loss.detach().item()
             loss.backward()
             optimizer.step()
 
-        del input_batch
-        del target_batch
-        del logits
-        del loss
-        del output
+        del input_batch, target_batch, logits, loss
         torch.cuda.empty_cache()
 
         mean_training_loss = training_loss / len(train_dataloader) / BATCH_SIZE
@@ -174,10 +164,6 @@ def train(grading_model, train_dataloader, validation_dataloader, optimizer, cri
             torch.save(optimizer.state_dict(), f"models/checkpoints/classification/{LOG_NAME}_optimizer_best.pth")
 
         print(f"Epoch: {epoch}, Mean training loss: {mean_training_loss}, Mean validation loss: {mean_validation_loss}")
-
-import matplotlib.pyplot as plt
-
-example_images = next(iter(train_dataloader))[0]
 
 if USE_MLFLOW:
     with mlflow.start_run(run_name=LOG_NAME):
