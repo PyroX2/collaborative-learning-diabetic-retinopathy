@@ -5,6 +5,13 @@ from typing import List, Dict, Tuple
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from tqdm import tqdm
+from torchvision.transforms import v2
+import torch.nn.functional as F
+
+
+postprocess_transform = v2.Compose([
+    v2.Resize([640, 640])
+])
 
 def memory_stats() -> None:
     print("Memory allocated:", torch.cuda.memory_allocated()/1024**2)
@@ -51,6 +58,8 @@ def calculate_mask_metrics(validation_px_dataloader, generator_model, criterion,
 
             # Generator masks for px level dataset and image level dataset
             generator_output = generator_model(mask_input_tensor)
+            generator_output = F.sigmoid(generator_output)
+            generator_output = postprocess_transform(generator_output)
 
             for i in range(num_classes):
                 loss_value = criterion(generator_output[:, i], mask_target_tensor[:, i])
