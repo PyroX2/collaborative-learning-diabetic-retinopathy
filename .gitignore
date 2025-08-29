@@ -185,3 +185,4 @@ models/
 mlruns/
 output_masks/
 logs/
+train.run
