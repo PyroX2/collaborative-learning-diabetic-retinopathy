@@ -1,7 +1,7 @@
-from segmentation.dataset import DRSegmentationDataset
-from segmentation.unet import UNet
-from segmentation.discriminator import Discriminator
-from segmentation.dice_loss import DiceLoss
+from src.segmentation.dataset import DRSegmentationDataset
+from src.segmentation.unet import UNet
+from src.segmentation.discriminator import Discriminator
+from src.segmentation.dice_loss import DiceLoss
 import torch
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
@@ -9,7 +9,7 @@ from torcheval.metrics import BinaryAccuracy, BinaryAUROC, BinaryF1Score, Binary
 from tqdm import tqdm
 import mlflow
 import os
-from segmentation.utils import log_class_metrics, calculate_mask_metrics
+from src.segmentation.utils import log_class_metrics, calculate_mask_metrics
 
 
 # Set manual seed for reproducibility

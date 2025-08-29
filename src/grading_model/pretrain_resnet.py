@@ -1,5 +1,3 @@
-from grading_model.dataset import GradingDataset
-from grading_model.grading_model import GradingModel
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, random_split
@@ -11,6 +9,7 @@ from tqdm import tqdm
 from torchvision.models import resnet50, ResNet50_Weights
 import mlflow
 import torch.nn.functional as F
+import os
 
 
 # Set manual seed for reproducibility
@@ -25,6 +24,8 @@ LEARNING_RATE = 1e-5
 USE_MLFLOW = False
 USE_TENSORBOARD = False
 LOG_NAME = "test"
+CHECKPOINT_DIR = "" # Directory where models and optimizers will be saved in
+DATASET_PATH = "" # Path to dataset root directory
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -37,9 +38,9 @@ if USE_MLFLOW:
 if USE_TENSORBOARD:
     writer = SummaryWriter(f"runs/{LOG_NAME}")
 
-train_root = "train/two_classes"
-validation_root = "val/two_classes"
-test_root = "test/two_classes"
+train_root = os.path.join(DATASET_PATH, "train", "two_classes")
+validation_root = os.path.join(DATASET_PATH, "val", "two_classes")
+test_root = os.path.join(DATASET_PATH, "test", "two_classes")
 
 train_dataset = ImageFolder(train_root, transform=transform)
 validation_dataset = ImageFolder(validation_root, transform=transform)
@@ -170,8 +171,8 @@ def train(grading_model, train_dataloader, validation_dataloader, optimizer, cri
 
         if mean_validation_loss < best_validation_loss:
             best_validation_loss = mean_validation_loss
-            torch.save(grading_model.state_dict(), f"models/checkpoints/classification/{LOG_NAME}_best.pth")
-            torch.save(optimizer.state_dict(), f"models/checkpoints/classification/{LOG_NAME}_optimizer_best.pth")
+            torch.save(grading_model.state_dict(), os.path.join(CHECKPOINT_DIR, f"{LOG_NAME}_best.pth"))
+            torch.save(optimizer.state_dict(), os.path.join(CHECKPOINT_DIR, f"{LOG_NAME}_optimizer_best.pth"))
 
         print(f"Epoch: {epoch}, Mean training loss: {mean_training_loss}, Mean validation loss: {mean_validation_loss}")
 
@@ -185,7 +186,7 @@ if USE_MLFLOW:
 else:
     train(grading_model, train_dataloader, validation_dataloader, optimizer, criterion, 100)
 
-torch.save(grading_model.state_dict(), f"models/classification/{LOG_NAME}_last.pth")
-torch.save(optimizer.state_dict(), f"models/classification/{LOG_NAME}_optimizer_last.pth")
+torch.save(grading_model.state_dict(), os.path.join(CHECKPOINT_DIR, f"{LOG_NAME}_last.pth"))
+torch.save(optimizer.state_dict(), os.path.join(CHECKPOINT_DIR, f"{LOG_NAME}_optimizer_last.pth"))
 
 

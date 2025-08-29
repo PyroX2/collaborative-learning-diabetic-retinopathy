@@ -1,9 +1,7 @@
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
 import os
 from PIL import Image
-import sys
 
 
 SCALE = 300

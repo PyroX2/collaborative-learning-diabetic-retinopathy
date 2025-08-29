@@ -1,4 +1,4 @@
-from grading_model import GradingModel
+from src.grading_model.grading_model import GradingModel
 import torch
 import torch.nn as nn
 from torchvision.transforms import v2

@@ -1,12 +1,12 @@
-from segmentation.dataset import DRSegmentationDataset
-from segmentation.unet_xception import UNet
-from segmentation.dice_loss import DiceLoss
+from src.segmentation.dataset import DRSegmentationDataset
+from src.segmentation.unet_xception import UNet
+from src.segmentation.dice_loss import DiceLoss
 import torch
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from tqdm import tqdm
 import mlflow
-from segmentation.utils import calculate_mask_metrics, log_class_metrics
+from src.segmentation.utils import calculate_mask_metrics, log_class_metrics
 import os
 
 # Set manual seed for reproducibility

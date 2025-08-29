@@ -1,7 +1,5 @@
-from grading_model.dataset import GradingDataset
-from grading_model.grading_model import GradingModel
+from src.grading_model.grading_model import GradingModel
 import torch
-from torch import nn
 from torch.utils.data import DataLoader, random_split
 from torcheval.metrics import BinaryAccuracy, BinaryAUPRC, BinaryAUROC, BinaryF1Score
 from torch.utils.tensorboard import SummaryWriter
@@ -10,6 +8,7 @@ from torchvision.transforms import v2
 from tqdm import tqdm
 import torch.nn.functional as F
 import mlflow
+import os
 
 
 # Set manual seed for reproducibility
@@ -24,6 +23,8 @@ LEARNING_RATE = 1e-5
 USE_MLFLOW = True
 USE_TENSORBOARD = True
 LOG_NAME = "grading_model_pretrain"
+DATASET_PATH = ""
+CHECKPOINT_DIR = "" # Path where models and optimizers will be saved in
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -34,10 +35,10 @@ transform = v2.Compose([
 if USE_MLFLOW:
     mlflow.set_tracking_uri("http://localhost:5000")
 if USE_TENSORBOARD:
-    writer = SummaryWriter(f"/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/runs/{LOG_NAME}")
+    writer = SummaryWriter(f"runs/{LOG_NAME}")
 
-train_root = "/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/eyepacs-aptos-messidor-diabetic-retinopathy-original-preprocessed-color-enhancement/train/two_classes"
-validation_root = "/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/eyepacs-aptos-messidor-diabetic-retinopathy-original-preprocessed-color-enhancement/val/two_classes"
+train_root = os.path.join(DATASET_PATH, "train", "two_classes")
+validation_root = os.path.join(DATASET_PATH, "val", "two_classes")
 
 train_dataset = ImageFolder(train_root, transform=transform)
 validation_dataset = ImageFolder(validation_root, transform=transform)
@@ -169,8 +170,8 @@ def train(grading_model, train_dataloader, validation_dataloader, optimizer, cri
 
         if mean_validation_loss < best_validation_loss:
             best_validation_loss = mean_validation_loss
-            torch.save(grading_model.state_dict(), f"/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/checkpoints/classification/{LOG_NAME}_best.pth")
-            torch.save(optimizer.state_dict(), f"/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/checkpoints/classification/{LOG_NAME}_optimizer_best.pth")
+            torch.save(grading_model.state_dict(), os.path.join(CHECKPOINT_DIR, f"{LOG_NAME}_best.pth"))
+            torch.save(optimizer.state_dict(), os.path.join(CHECKPOINT_DIR, f"{LOG_NAME}_optimizer_best.pth"))
 
         print(f"Epoch: {epoch}, Mean training loss: {mean_training_loss}, Mean validation loss: {mean_validation_loss}")
 
@@ -184,7 +185,7 @@ if USE_MLFLOW:
 else:
     train(grading_model, train_dataloader, validation_dataloader, optimizer, criterion, 100)
 
-torch.save(grading_model.state_dict(), f"/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/classification/{LOG_NAME}_last.pth")
-torch.save(optimizer.state_dict(), f"/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/classification/{LOG_NAME}_optimizer_last.pth")
+torch.save(grading_model.state_dict(), os.path.join(CHECKPOINT_DIR, f"{LOG_NAME}_last.pth"))
+torch.save(optimizer.state_dict(), os.path.join(CHECKPOINT_DIR, f"{LOG_NAME}_optimizer_last.pth"))
 
 

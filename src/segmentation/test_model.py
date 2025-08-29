@@ -1,47 +1,24 @@
 import torch
+from src.segmentation.dataset import DRSegmentationDataset
+from src.segmentation.unet import UNet
 from torcheval.metrics import BinaryAccuracy, BinaryAUROC, BinaryF1Score, BinaryAUPRC
-import mlflow
-from typing import List, Dict, Tuple
-from torch.utils.tensorboard import SummaryWriter
-import numpy as np
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+import numpy as np
 
-def memory_stats() -> None:
-    print("Memory allocated:", torch.cuda.memory_allocated()/1024**2)
-    print("Memory cached:", torch.cuda.memory_reserved()/1024**2)
 
-def log_class_metrics(all_metrics: List[Dict], step: int, split: str="split_not_specified", log_mlflow: bool=True, tensorboard_writer: SummaryWriter=None) -> None:
-    for metrics in all_metrics:
-        class_name = metrics['class_name']
-        auroc = metrics['auroc']
-        auprc = metrics['auprc']
-        accuracy = metrics['accuracy']
-        f1_score = metrics['f1_score']
-        loss = metrics['loss']
+NUM_CLASSES = 5
 
-        if log_mlflow:
-            mlflow.log_metric(f"{class_name}/{split}/AUROC", auroc, step=step)
-            mlflow.log_metric(f"{class_name}/{split}/AUPRC", auprc, step=step)
-            mlflow.log_metric(f"{class_name}/{split}/Accuracy", accuracy, step=step)
-            mlflow.log_metric(f"{class_name}/{split}/F1Score", f1_score, step=step)
-            mlflow.log_metric(f"{class_name}/{split}/DiceLoss", loss, step=step)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        if tensorboard_writer is not None:
-            tensorboard_writer.add_scalar(f"{class_name}/{split}/AUROC", auroc, step)
-            tensorboard_writer.add_scalar(f"{class_name}/{split}/AUPRC", auprc, step)
-            tensorboard_writer.add_scalar(f"{class_name}/{split}/Accuracy", accuracy, step)
-            tensorboard_writer.add_scalar(f"{class_name}/{split}/F1Score", f1_score, step)
-            tensorboard_writer.add_scalar(f"{class_name}/{split}/DiceLoss", loss, step)
+test_dataset_dir = ''
+model_path = ''
 
-def calculate_mask_metrics(validation_px_dataloader, generator_model, criterion, class_names, device=None) -> Tuple:
-    num_classes = len(class_names)
-    if device is None:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+def calculate_mask_metrics(validation_px_dataloader, generator_model, criterion, class_names):
+    targets = [[] for _ in range(NUM_CLASSES)]
+    predicted_values = [[] for _ in range(NUM_CLASSES)]
 
-    targets = [[] for _ in range(num_classes)]
-    predicted_values = [[] for _ in range(num_classes)]
-
-    validation_loss = [0 for _ in range(num_classes)]
+    validation_loss = [0 for _ in range(NUM_CLASSES)]
 
     generator_model.eval()
     with torch.no_grad():
@@ -52,7 +29,7 @@ def calculate_mask_metrics(validation_px_dataloader, generator_model, criterion,
             # Generator masks for px level dataset and image level dataset
             generator_output = generator_model(mask_input_tensor)
 
-            for i in range(num_classes):
+            for i in range(NUM_CLASSES):
                 loss_value = criterion(generator_output[:, i], mask_target_tensor[:, i])
                 validation_loss[i] += loss_value.detach().cpu().item()
 
@@ -67,7 +44,7 @@ def calculate_mask_metrics(validation_px_dataloader, generator_model, criterion,
     validation_loss = [class_val_loss / len(validation_px_dataloader) for class_val_loss in validation_loss]
 
     all_metrics = []
-    for i in range(num_classes):
+    for i in range(NUM_CLASSES):
         class_metrics = {
             'class_name': class_names[i],
             'loss': validation_loss[i]        
@@ -106,3 +83,64 @@ def calculate_mask_metrics(validation_px_dataloader, generator_model, criterion,
 
 
     return all_metrics, validation_epoch_loss, val_auroc, val_auprc, val_accuracy, val_f1_score
+
+
+test_dataset = DRSegmentationDataset(test_dataset_dir)
+
+test_dataloader = torch.utils.data.DataLoader(
+                      test_dataset, 
+                      batch_size=1)
+
+loaded_model = UNet(3, NUM_CLASSES)
+loaded_model.to(device)
+loaded_model.load_state_dict(torch.load(model_path, map_location=device))
+
+loaded_model.eval()
+loss = torch.nn.BCELoss()
+
+class_names = test_dataset.class_names
+
+metrics, validation_epoch_loss, val_auroc, val_auprc, val_accuracy, val_f1_score = calculate_mask_metrics(test_dataloader, loaded_model, loss, class_names)
+
+metrics_names = ['loss', 'auroc', 'auprc', 'accuracy', 'f1_score']
+
+plt.figure(figsize=(15, 8))
+for i, metric in enumerate(metrics_names):
+    plt.subplot(2, 3, i+1)
+    values = [m[metric] for m in metrics]
+    bars = plt.bar(class_names, values)
+    plt.title(metric)
+    plt.xticks(rotation=45)
+    plt.ylabel('Value')
+    plt.ylim(0, 1.2 if metric != 'loss' else max(values)*1.2)
+
+    for bar, value in zip(bars, values):
+        plt.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height(),
+            f'{value:.3f}',
+            ha='center',
+            va='bottom',
+            fontsize=10
+        )
+
+plt.subplot(2, 3, 6)
+values = [validation_epoch_loss, val_auroc, val_auprc, val_accuracy, val_f1_score]
+bars = plt.bar(['Test Loss', 'Test AUROC', 'Test AUPRC', 'Test Accuracy', 'Test F1 Score'], values)
+plt.title('Overall Metrics')
+plt.xticks(rotation=45)
+plt.ylabel('Value')
+plt.ylim(0, 1.2)
+
+for bar, value in zip(bars, values):
+    plt.text(
+        bar.get_x() + bar.get_width() / 2,
+        bar.get_height(),
+        f'{value:.3f}',
+        ha='center',
+        va='bottom',
+        fontsize=10
+    )
+
+plt.tight_layout()
+plt.savefig('segmentation_metrics.png')

@@ -1,4 +1,4 @@
-from grading_model.grading_model import GradingModel
+from src.grading_model.grading_model import GradingModel
 import torch
 from torch.utils.data import DataLoader, random_split
 from torcheval.metrics import BinaryAccuracy, BinaryAUPRC, BinaryAUROC, BinaryF1Score
@@ -7,7 +7,7 @@ import cv2
 from tqdm import tqdm
 from torchvision.datasets import ImageFolder
 from torchvision.transforms import v2
-from segmentation.unet import UNet
+from src.segmentation.unet import UNet
 import os
 import mlflow
 from mlflow.models import infer_signature
@@ -169,29 +169,28 @@ def train(grading_model, grading_model_pretrained, segmentation_model, train_dat
         mean_training_loss = epoch_loss / len(train_dataloader) / BATCH_SIZE
 
         if TENSORBOARD:
-            writer.add_scalar("train/Loss", mean_training_loss, epoch)
-            writer.add_scalar("train/Accuracy", train_accuracy_score, epoch)
-            writer.add_scalar("train/F1 Score", train_f1_score, epoch)
-            writer.add_scalar("train/AUPRC", train_auprc_score, epoch)
-            writer.add_scalar("train/AUROC", train_auroc_score, epoch)
-
-            writer.add_scalar("validation/Loss", mean_validation_loss, epoch)
-            writer.add_scalar("validation/Accuracy", validation_accuracy_score, epoch)
-            writer.add_scalar("validation/F1 Score", validation_f1_score, epoch)
-            writer.add_scalar("validation/AUPRC", validation_auprc_score, epoch)
-            writer.add_scalar("validation/AUROC", validation_auroc_score, epoch)
+            writer.add_scalar("Loss/train", mean_training_loss, epoch)
+            writer.add_scalar("Accuracy/train", train_accuracy_score, epoch)
+            writer.add_scalar("F1 Score/train", train_f1_score, epoch)
+            writer.add_scalar("AUPRC/train", train_auprc_score, epoch)
+            writer.add_scalar("AUROC/train", train_auroc_score, epoch)
+            writer.add_scalar("Loss/validation", mean_validation_loss, epoch)
+            writer.add_scalar("Accuracy/validation", validation_accuracy_score, epoch)
+            writer.add_scalar("F1 Score/validation", validation_f1_score, epoch)
+            writer.add_scalar("AUPRC/validation", validation_auprc_score, epoch)
+            writer.add_scalar("AUROC/validation", validation_auroc_score, epoch)
 
         if MLFLOW:
-            mlflow.log_metric("train/Loss", mean_training_loss, epoch)
-            mlflow.log_metric("train/Accuracy", train_accuracy_score, epoch)
-            mlflow.log_metric("train/F1 Score", train_f1_score, epoch)
-            mlflow.log_metric("train/AUPRC", train_auprc_score, epoch)
-            mlflow.log_metric("train/AUROC", train_auroc_score, epoch)
-            mlflow.log_metric("validation/Loss", mean_validation_loss, epoch)
-            mlflow.log_metric("validation/Accuracy", validation_accuracy_score, epoch)
-            mlflow.log_metric("validation/F1 Score", validation_f1_score, epoch)
-            mlflow.log_metric("validation/AUPRC", validation_auprc_score, epoch)
-            mlflow.log_metric("validation/AUROC", validation_auroc_score, epoch)
+            mlflow.log_metric("Loss/train", mean_training_loss, epoch)
+            mlflow.log_metric("Accuracy/train", train_accuracy_score, epoch)
+            mlflow.log_metric("F1 Score/train", train_f1_score, epoch)
+            mlflow.log_metric("AUPRC/train", train_auprc_score, epoch)
+            mlflow.log_metric("AUROC/train", train_auroc_score, epoch)
+            mlflow.log_metric("Loss/validation", mean_validation_loss, epoch)
+            mlflow.log_metric("Accuracy/validation", validation_accuracy_score, epoch)
+            mlflow.log_metric("F1 Score/validation", validation_f1_score, epoch)
+            mlflow.log_metric("AUPRC/validation", validation_auprc_score, epoch)
+            mlflow.log_metric("AUROC/validation", validation_auroc_score, epoch)
 
         if mean_validation_loss < best_validation_loss:
             best_validation_loss = mean_validation_loss
