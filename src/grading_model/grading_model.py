@@ -81,57 +81,27 @@ class GradingModel(nn.Module):
         return logits, f_high
 
 
-    def forward(self, x: torch.Tensor, 
-                masks: torch.Tensor=None, 
-                f_low: torch.Tensor=None, 
-                f_high: torch.Tensor=None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor, attention_maps: torch.Tensor=None) -> torch.Tensor:
         # Masks should be of size BATCH_SIZE x number_of_masks x height x width
-        if masks is None or f_low is None or f_high is None:
-            f_low = self.f_low_seq(x)
-            logits, f_high = self.logits_from_flow(f_low)
-            return logits, f_low, f_high, None
-        else:
-            preprocessed_masks = self.mask_preprocess_seq(masks) # Shape [BATCH SIZE x 16*num_lesions x 640 x 640]
-            preprocessed_masks = torch.reshape(preprocessed_masks, (preprocessed_masks.shape[0], self.num_lesions, int(preprocessed_masks.shape[1]/self.num_lesions), preprocessed_masks.shape[2], preprocessed_masks.shape[3])) # Shape [BATCH SIZE x num_lesions x 16 x 640 x 640]
+        f_low = self.f_low_seq(x)
+        
+        f_low_expanded = f_low.unsqueeze(1)
+        attention_maps_expanded = attention_maps.unsqueeze(2)
+        new_f_low = torch.mul(f_low_expanded, attention_maps_expanded)
 
-            f_low_expanded = f_low.unsqueeze(1).expand(-1, self.num_lesions, -1, -1, -1)  # Expand the shape to allow concatenation
+        # new_f_low: (batch_size, num_lesions, 32, 640, 640)
+        batch_size, num_lesions, c, h, w = new_f_low.shape
 
-            # Concatenate masks with f_low, output shape is [BATCH SIZE x num_lesions, 48 x 640 x 640]
-            concat_masks = torch.cat([preprocessed_masks, f_low_expanded], dim=2)  # Concatenate along the channel dimension (dim=2) for each lesion
+        # Merge batch and lesion dims for processing
+        new_f_low_reshaped = new_f_low.view(batch_size * self.num_lesions, c, h, w)  # (batch_size*num_lesions, 32, 640, 640)
 
-            # Reshape the concatenated masks to have the shape [BATCH SIZE x num_lesions*48 x 640 x 640]
-            concat_masks = concat_masks.reshape(concat_masks.shape[0], self.num_lesions*concat_masks.shape[2], concat_masks.shape[3], concat_masks.shape[4]) 
+        # Pass through post_f_low_seq and global average pool
+        lesion_cls_output_vector = self.post_f_low_seq(new_f_low_reshaped).mean((-2, -1), keepdim=True)  # (batch_size*num_lesions, 1024, 1, 1)
 
-            # Process concatenated masks and image to shape [BATCH SIZE x num_lesions*32 x 640 x 640]
-            f_low_att = self.mask_input_image_conv(concat_masks)
+        # Reshape back to (batch_size, num_lesions*1024, 1, 1)
+        all_masks_classification_outputs = lesion_cls_output_vector.view(batch_size, num_lesions*1024, 1, 1)
 
-            f_low_att = f_low_att.reshape(f_low_att.shape[0], self.num_lesions, int(f_low_att.shape[1]/self.num_lesions), f_low_att.shape[2], f_low_att.shape[3]) 
+        pre_logits = self.output_conv1x1(all_masks_classification_outputs)
+        logits = self.fc(torch.squeeze(pre_logits, (-2, -1)))  # Squeeze the last two dimensions to get logits of shape [BATCH SIZE x 1024]
 
-            attention_maps = torch.mul(f_low_att, f_high.unsqueeze(1))
-
-            attention_maps = attention_maps.reshape(attention_maps.shape[0], self.num_lesions*attention_maps.shape[2], attention_maps.shape[3], attention_maps.shape[4])
-
-            attention_maps = F.sigmoid(self.w_high(attention_maps))
-
-            f_low_expanded = f_low.unsqueeze(1)
-
-            attention_maps_expanded = attention_maps.unsqueeze(2)
-
-            new_f_low = torch.mul(f_low_expanded, attention_maps_expanded)
-
-            # new_f_low: (batch_size, num_lesions, 32, 640, 640)
-            batch_size, num_lesions, c, h, w = new_f_low.shape
-
-            # Merge batch and lesion dims for processing
-            new_f_low_reshaped = new_f_low.view(batch_size * self.num_lesions, c, h, w)  # (batch_size*num_lesions, 32, 640, 640)
-
-            # Pass through post_f_low_seq and global average pool
-            lesion_cls_output_vector = self.post_f_low_seq(new_f_low_reshaped).mean((-2, -1), keepdim=True)  # (batch_size*num_lesions, 1024, 1, 1)
-
-            # Reshape back to (batch_size, num_lesions*1024, 1, 1)
-            all_masks_classification_outputs = lesion_cls_output_vector.view(batch_size, num_lesions*1024, 1, 1)
-
-            pre_logits = self.output_conv1x1(all_masks_classification_outputs)
-            logits = self.fc(torch.squeeze(pre_logits, (-2, -1)))  # Squeeze the last two dimensions to get logits of shape [BATCH SIZE x 1024]
-
-            return logits, f_low, f_high, attention_maps
+        return logits, attention_maps

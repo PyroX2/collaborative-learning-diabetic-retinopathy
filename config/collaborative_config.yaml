@@ -1,0 +1,15 @@
+# General
+batch_size: 16
+num_epochs: 100
+
+# Grading model
+grading_model_lr: 1.0e-5
+grading_update_size: 128
+num_outputs: 1
+
+# Segmentation model
+lambda: 0
+segmentation_loss: "bce" # "bce" or "dice"
+segmentation_model_lr: 0.0002
+discriminator_lr: 1.0e-6
+num_classes: 5 # This is equal to number of channels in segmentation model output
