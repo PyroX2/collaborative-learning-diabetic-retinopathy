@@ -71,8 +71,16 @@ if TENSORBOARD:
     writer = SummaryWriter(f"runs/{LOG_NAME}")
 
 def train(models: Dict, dataloaders: Dict, optimizers: Dict, criterions: Dict) -> None:
+    best_grading_val_loss = float("inf")
+    best_seg_loss = float("inf")
     for epoch in range(NUM_EPOCHS):
         metrics = grading_train(models, dataloaders, optimizers, criterions, GRADING_UPDATE_SIZE)
+
+        grading_val_loss = metrics["Loss/validation"]
+
+        if grading_val_loss < best_grading_val_loss:
+            torch.save(models["grading"], os.path.join(CHECKPOINT_DIR, "grading_model_best_grading.pth"))
+            torch.save(models["unet"], os.path.join(CHECKPOINT_DIR, "seg_model_best_grading.pth"))
 
         for metric_name, metric in metrics.items():
             if TENSORBOARD:
@@ -82,11 +90,19 @@ def train(models: Dict, dataloaders: Dict, optimizers: Dict, criterions: Dict) -
 
         seg_metrics = segmentation_train(models, dataloaders, optimizers, criterions)
 
+        seg_val_loss = seg_metrics["GeneratorLoss/Val"]
+
+        if seg_val_loss < best_seg_loss:
+            torch.save(models["unet"], os.path.join(CHECKPOINT_DIR, "seg_model_best_seg.pth"))
+
         for metric_name, metric in seg_metrics.items():
             if TENSORBOARD:
                 writer.add_scalar(metric_name, metric, epoch)
             if MLFLOW:
                 mlflow.log_metric(metric_name, metric, epoch)
+
+    for model_name, model in models.items():
+        torch.save(model, os.path.join(CHECKPOINT_DIR, f"{model_name}_last.pth"))
 
 
 def main():
