@@ -1,5 +1,5 @@
 from grading_model.dataset import GradingDataset
-from grading_model.grading_model import GradingModel
+from grading_model.grading_model import FLowModel, FHighModel
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, random_split
@@ -23,7 +23,7 @@ LEARNING_RATE = 1e-5
 
 USE_MLFLOW = True
 USE_TENSORBOARD = True
-LOG_NAME = "grading_model_pretrain"
+LOG_NAME = "flow_fhigh_separate-pretrain"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -34,10 +34,10 @@ transform = v2.Compose([
 if USE_MLFLOW:
     mlflow.set_tracking_uri("http://localhost:5000")
 if USE_TENSORBOARD:
-    writer = SummaryWriter(f"/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/runs/{LOG_NAME}")
+    writer = SummaryWriter(f"runs/{LOG_NAME}")
 
-train_root = "/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/eyepacs-aptos-messidor-diabetic-retinopathy-original-preprocessed-color-enhancement/train/two_classes"
-validation_root = "/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/datasets/eyepacs-aptos-messidor-diabetic-retinopathy-original-preprocessed-color-enhancement/val/two_classes"
+train_root = ""
+validation_root = ""
 
 train_dataset = ImageFolder(train_root, transform=transform)
 validation_dataset = ImageFolder(validation_root, transform=transform)
@@ -48,25 +48,30 @@ train_dataloader = DataLoader(train_dataset, BATCH_SIZE, shuffle=True, num_worke
 validation_dataloader = DataLoader(validation_dataset, BATCH_SIZE, shuffle=True, num_workers=32)
 train_metrics_dataloader = DataLoader(train_metrics_dataset, BATCH_SIZE, shuffle=False, num_workers=32)
 
-grading_model = GradingModel(num_lesions=4, num_outputs=1)
-grading_model.to(device)
+f_low_model = FLowModel()
+f_low_model.to(device)
+f_high_model = FHighModel(num_outputs=1, num_lesions=4)
+f_high_model.to(device)
 
-optimizer = torch.optim.Adam(grading_model.parameters(), lr=LEARNING_RATE)
+optimizer = torch.optim.Adam(list(f_low_model.parameters())+list(f_high_model.parameters()), lr=LEARNING_RATE)
 
 criterion = torch.nn.BCELoss()
 
-def validate(grading_model, validation_dataloader, criterion):
+def validate(f_low_model, f_high_model, validation_dataloader, criterion):
         validation_loss = 0
 
         predicted_values = []
         targets = []
 
-        grading_model.eval()
+        f_low_model.eval()
+        f_high_model.eval()
         for input_batch, target_batch in tqdm(validation_dataloader):
             input_batch = input_batch.to(device)
             target_batch = target_batch.to(device).to(torch.float32)
 
-            logits, f_low, f_high, _ = grading_model(input_batch)
+            f_low = f_low_model(input_batch)
+            logits, f_high = f_high_model(f_low)
+            
             output = F.sigmoid(logits.squeeze())
 
             loss = criterion(output, target_batch)
@@ -108,21 +113,24 @@ def validate(grading_model, validation_dataloader, criterion):
 
         return mean_validation_loss, accuracy_score, f1_score, auprc_score, auroc_score
 
-def train(grading_model, train_dataloader, validation_dataloader, optimizer, criterion, n_epochs):
+def train(f_low_model, f_high_model, train_dataloader, validation_dataloader, optimizer, criterion, n_epochs):
     if USE_MLFLOW:
         mlflow.log_params({"Batch size": BATCH_SIZE, "Learning rate": LEARNING_RATE})
 
     best_validation_loss = float("inf")
     for epoch in range(n_epochs):
         training_loss = 0
-        grading_model.train()
+        f_low_model.train()
+        f_high_model.train()
         for input_batch, target_batch in tqdm(train_dataloader):
             optimizer.zero_grad()
 
             input_batch = input_batch.to(device)
             target_batch = target_batch.to(device).to(torch.float32)
 
-            logits, f_low, f_high, _ = grading_model(input_batch)
+            f_low = f_low_model(input_batch)
+            logits, f_high = f_high_model(f_low)
+            
             output = F.sigmoid(logits.squeeze())
 
             loss = criterion(output, target_batch)
@@ -140,8 +148,8 @@ def train(grading_model, train_dataloader, validation_dataloader, optimizer, cri
 
         mean_training_loss = training_loss / len(train_dataloader) / BATCH_SIZE
 
-        _, train_accuracy_score, train_f1_score, train_auprc_score, train_auroc_score = validate(grading_model, train_metrics_dataloader, criterion)
-        mean_validation_loss, validation_accuracy_score, validation_f1_score, validation_auprc_score, validation_auroc_score = validate(grading_model, validation_dataloader, criterion)
+        _, train_accuracy_score, train_f1_score, train_auprc_score, train_auroc_score = validate(f_low_model, f_high_model, train_metrics_dataloader, criterion)
+        mean_validation_loss, validation_accuracy_score, validation_f1_score, validation_auprc_score, validation_auroc_score = validate(f_low_model, f_high_model, validation_dataloader, criterion)
 
         if USE_TENSORBOARD:
             writer.add_scalar("Loss/train", mean_training_loss, epoch)
@@ -169,8 +177,9 @@ def train(grading_model, train_dataloader, validation_dataloader, optimizer, cri
 
         if mean_validation_loss < best_validation_loss:
             best_validation_loss = mean_validation_loss
-            torch.save(grading_model.state_dict(), f"/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/checkpoints/classification/{LOG_NAME}_best.pth")
-            torch.save(optimizer.state_dict(), f"/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/checkpoints/classification/{LOG_NAME}_optimizer_best.pth")
+            torch.save(f_low_model.state_dict(), f"models/checkpoints/classification/{LOG_NAME}_flow_best.pth")
+            torch.save(f_high_model.state_dict(), f"models/checkpoints/classification/{LOG_NAME}_fhigh_best.pth")
+            torch.save(optimizer.state_dict(), f"models/checkpoints/classification/{LOG_NAME}_optimizer_best.pth")
 
         print(f"Epoch: {epoch}, Mean training loss: {mean_training_loss}, Mean validation loss: {mean_validation_loss}")
 
@@ -180,11 +189,12 @@ example_images = next(iter(train_dataloader))[0]
 
 if USE_MLFLOW:
     with mlflow.start_run(run_name=LOG_NAME):
-        train(grading_model, train_dataloader, validation_dataloader, optimizer, criterion, 100)
+        train(f_low_model, f_high_model, train_dataloader, validation_dataloader, optimizer, criterion, 100)
 else:
-    train(grading_model, train_dataloader, validation_dataloader, optimizer, criterion, 100)
+    train(f_low_model, f_high_model, train_dataloader, validation_dataloader, optimizer, criterion, 100)
 
-torch.save(grading_model.state_dict(), f"/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/classification/{LOG_NAME}_last.pth")
-torch.save(optimizer.state_dict(), f"/users/scratch1/s189737/collaborative-learning-diabetic-retinopathy/models/classification/{LOG_NAME}_optimizer_last.pth")
+torch.save(f_low_model.state_dict(), f"models/classification/{LOG_NAME}_flow_last.pth")
+torch.save(f_high_model.state_dict(), f"models/classification/{LOG_NAME}_fhigh_last.pth")
+torch.save(optimizer.state_dict(), f"models/classification/{LOG_NAME}_optimizer_last.pth")
 
 
