@@ -1,4 +1,4 @@
-from grading_model.grading_model import GradingModel
+from grading_model.grading_model import FLowModel, FHighModel, AttentionModel
 import torch
 from torch.utils.data import DataLoader, random_split
 from torcheval.metrics import BinaryAccuracy, BinaryAUPRC, BinaryAUROC, BinaryF1Score
@@ -22,14 +22,14 @@ torch.backends.cudnn.benchmark = False
 BATCH_SIZE = 16
 MLFLOW = True
 TENSORBOARD = True
-LOG_NAME = "attentive_grading_model_train"
+LOG_NAME = "flow_fhigh_separate-train"
 NUM_EPOCHS = 100
 
 NUM_LESIONS = 4
 NUM_OUTPUTS = 1 # Number of outputs in grading model. 1 when used for binary classification
 
-OPTIMIZER_STATE_DICT = ''
-GRADING_MODEL_STATE_DICT = ''
+FLOW_MODEL_STATE_DICT = ''
+FHIGH_MODEL_STATE_DICT = ''
 SEGMENTATION_MODEL_STATE_DICT = ''
 CHECKPOINT_DIR = ''
 DATASET_PATH = ''
@@ -39,14 +39,21 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 if TENSORBOARD:
     writer = SummaryWriter(f"runs/{LOG_NAME}")
 
-def validate(grading_model, grading_model_pretrained, segmentation_model, validation_dataloader, criterion, epoch=None):
+
+def disable_model_grad(model: torch.nn.Module) -> None:
+    for param in model.parameters():
+        param.requires_grad = False
+
+
+def validate(f_low_model, f_high_model, attention_model, segmentation_model, validation_dataloader, criterion, epoch=None):
     validation_loss = 0
 
     predicted_values = []
     targets = []
 
-    grading_model.eval()
-    grading_model_pretrained.eval()
+    f_low_model.eval()
+    f_high_model.eval()
+    attention_model.eval()
     segmentation_model.eval()
     with torch.no_grad():
         for batch_index, (input_batch, target_batch) in tqdm(enumerate(validation_dataloader)):
@@ -55,9 +62,13 @@ def validate(grading_model, grading_model_pretrained, segmentation_model, valida
 
             masks = segmentation_model(input_batch)
             masks = torch.cat((masks[:, :3], masks[:, 4:]), dim=1) # Drop optic disc if applicable
-            pretrained_logits, pretrained_f_low, pretrained_f_high, _ = grading_model_pretrained(input_batch)
 
-            logits, _, _, attention_maps = grading_model(input_batch, masks, pretrained_f_low, pretrained_f_high)
+            f_low = f_low_model(input_batch)
+            _, f_high = f_high_model(f_low)
+
+            attention_maps = attention_model(f_low, f_high, masks)
+            logits, _ = f_high_model(f_low, attention_maps)
+
             output = F.sigmoid(logits).squeeze(-1)
 
             if epoch is not None and epoch % 1 == 0 and batch_index == 0:
@@ -122,14 +133,15 @@ def validate(grading_model, grading_model_pretrained, segmentation_model, valida
 
     return mean_validation_loss, accuracy_score, f1_score, auprc_score, auroc_score
 
-def train(grading_model, grading_model_pretrained, segmentation_model, train_dataloader, train_metrics_dataloader, validation_dataloader, optimizer, criterion, n_epochs):
+def train(f_low_model, f_high_model, attention_model, segmentation_model, train_dataloader, train_metrics_dataloader, validation_dataloader, optimizer, criterion, n_epochs):
     best_validation_loss = float("inf")
     for epoch in range(n_epochs):
         epoch_loss = 0
 
-        grading_model.train()
+        f_low_model.eval()
+        f_high_model.eval()
+        attention_model.train()
         segmentation_model.eval()
-        grading_model_pretrained.eval()
         for input_batch, target_batch in tqdm(train_dataloader):
             optimizer.zero_grad()
 
@@ -138,14 +150,14 @@ def train(grading_model, grading_model_pretrained, segmentation_model, train_dat
 
             with torch.no_grad():
                 masks = segmentation_model(input_batch)
-                pretrained_logits, pretrained_f_low, pretrained_f_high, _ = grading_model_pretrained(input_batch)
+                f_low = f_low_model(input_batch)
+                _, f_high = f_high_model(f_low)
                 
                 masks = masks.detach()
                 masks = torch.cat((masks[:, :3], masks[:, 4:]), dim=1) # Drop optic disc if applicable
-                pretrained_f_low = pretrained_f_low.detach()
-                pretrained_f_high = pretrained_f_high.detach()
 
-            logits, _, _, attention_maps = grading_model(input_batch, masks, pretrained_f_low, pretrained_f_high)
+            attention_maps = attention_model(f_low, f_high, masks)
+            logits, _ = f_high_model(f_low, attention_maps)
             output = F.sigmoid(logits).squeeze(-1)
 
             loss = criterion(output, target_batch)
@@ -163,8 +175,8 @@ def train(grading_model, grading_model_pretrained, segmentation_model, train_dat
         del output
         torch.cuda.empty_cache()
         
-        _, train_accuracy_score, train_f1_score, train_auprc_score, train_auroc_score = validate(grading_model, grading_model_pretrained, segmentation_model, train_metrics_dataloader, criterion)
-        mean_validation_loss, validation_accuracy_score, validation_f1_score, validation_auprc_score, validation_auroc_score = validate(grading_model, grading_model_pretrained, segmentation_model, validation_dataloader, criterion, epoch)
+        _, train_accuracy_score, train_f1_score, train_auprc_score, train_auroc_score = validate(f_low_model, f_high_model, attention_model, segmentation_model, train_metrics_dataloader, criterion)
+        mean_validation_loss, validation_accuracy_score, validation_f1_score, validation_auprc_score, validation_auroc_score = validate(f_low_model, f_high_model, attention_model, segmentation_model, validation_dataloader, criterion, epoch)
 
         mean_training_loss = epoch_loss / len(train_dataloader) / BATCH_SIZE
 
@@ -195,11 +207,15 @@ def train(grading_model, grading_model_pretrained, segmentation_model, train_dat
 
         if mean_validation_loss < best_validation_loss:
             best_validation_loss = mean_validation_loss
-            torch.save(grading_model.state_dict(), os.path.join(CHECKPOINT_DIR, f"{LOG_NAME}_best.pth"))
+            torch.save(f_low_model.state_dict(), os.path.join(CHECKPOINT_DIR, f"{LOG_NAME}_flow_best.pth"))
+            torch.save(f_high_model.state_dict(), os.path.join(CHECKPOINT_DIR, f"{LOG_NAME}_fhigh_best.pth"))
+            torch.save(attention_model.state_dict(), os.path.join(CHECKPOINT_DIR, f"{LOG_NAME}_attention_best.pth"))
 
         print(f"Epoch: {epoch}, Mean training loss: {mean_training_loss}, Mean validation loss: {mean_validation_loss}")
 
-    torch.save(grading_model.state_dict(), os.path.join(CHECKPOINT_DIR, f"{LOG_NAME}_final.pth"))
+        torch.save(f_low_model.state_dict(), os.path.join(CHECKPOINT_DIR, f"{LOG_NAME}_flow_final.pth"))
+        torch.save(f_high_model.state_dict(), os.path.join(CHECKPOINT_DIR, f"{LOG_NAME}_fhigh_final.pth"))
+        torch.save(attention_model.state_dict(), os.path.join(CHECKPOINT_DIR, f"{LOG_NAME}_attention_final.pth"))
 
 
 def main():
@@ -231,52 +247,35 @@ def main():
     validation_dataloader = DataLoader(validation_dataset, BATCH_SIZE, shuffle=False, num_workers=42)
     train_metrics_dataloader = DataLoader(train_metrics_dataset, BATCH_SIZE, shuffle=False, num_workers=42)
 
-    grading_model_pretrained = GradingModel(num_lesions=NUM_LESIONS, num_outputs=NUM_OUTPUTS)
-    grading_model_pretrained.to(device)
-    grading_model_pretrained.load_state_dict(torch.load(GRADING_MODEL_STATE_DICT, weights_only=True, map_location=device))
+    f_low_model = FLowModel()
+    f_low_model.to(device)
+    f_low_model.load_state_dict(torch.load(FLOW_MODEL_STATE_DICT, weights_only=True, map_location=device))
+    disable_model_grad(f_low_model)
 
-    grading_model = GradingModel(num_lesions=NUM_LESIONS, num_outputs=NUM_OUTPUTS)
-    grading_model.to(device)
-    grading_model.load_state_dict(torch.load(GRADING_MODEL_STATE_DICT, weights_only=True, map_location=device))
+    f_high_model = FHighModel(num_outputs=NUM_OUTPUTS, num_lesions=NUM_LESIONS)
+    f_high_model.to(device)
+    f_high_model.load_state_dict(torch.load(FHIGH_MODEL_STATE_DICT, weights_only=True, map_location=device))
+    disable_model_grad(f_high_model)
+
+    attention_model = AttentionModel(num_lesions=NUM_LESIONS)
+    attention_model.to(device)
 
     segmentation_model = UNet(3, 5)
     segmentation_model.to(device)
     segmentation_model.load_state_dict(torch.load(SEGMENTATION_MODEL_STATE_DICT, weights_only=True, map_location=device))
 
-    optimizer = torch.optim.Adam(grading_model.parameters(), lr=1e-5)
-    optimizer.load_state_dict(torch.load(OPTIMIZER_STATE_DICT, map_location=device))
+    optimizer = torch.optim.Adam(attention_model.parameters(), lr=1e-5)
 
     criterion = torch.nn.BCELoss()
         
     if MLFLOW:
         mlflow.set_tracking_uri("http://localhost:5000")
-        mlflow.set_experiment("attentive-model-training")
+        # mlflow.set_experiment("attentive-model-training")
         with mlflow.start_run(run_name=LOG_NAME):
-            train(grading_model, grading_model_pretrained, segmentation_model, train_dataloader, train_metrics_dataloader, validation_dataloader, optimizer, criterion, NUM_EPOCHS)
+            train(f_low_model, f_high_model, attention_model, segmentation_model, train_dataloader, train_metrics_dataloader, validation_dataloader, optimizer, criterion, NUM_EPOCHS)
 
-            # Obtain data for creating signatures for models logging into mlflow
-            x_test, y_test = next(iter(validation_dataloader))
-            x_test = x_test.to(device)
-
-            with torch.no_grad():
-                segmentation_model_output = segmentation_model(x_test)
-                grading_backbone_output, pretrained_f_low, pretrained_f_high, _ = grading_model_pretrained(x_test)
-                grading_head_output, _, _, _ = grading_model(x_test, segmentation_model_output, pretrained_f_low, pretrained_f_high)
-
-            x_test = x_test.cpu().numpy()
-            segmentation_model_output = segmentation_model_output.cpu().numpy()
-            grading_head_output = grading_head_output.cpu().numpy()
-            grading_backbone_output = grading_backbone_output.cpu().numpy()
-
-            grading_head_signature = infer_signature(x_test, grading_head_output)
-            grading_backbone_signature = infer_signature(x_test, grading_backbone_output)
-            segmentation_model_signature = infer_signature(x_test, segmentation_model_output)
-
-            mlflow.pytorch.log_model(grading_model_pretrained, registered_model_name="grading_model_fine_tuned_backbone", signature=grading_head_signature)
-            mlflow.pytorch.log_model(grading_model, registered_model_name="grading_model_fine_tuned_head", signature=grading_backbone_signature)
-            mlflow.pytorch.log_model(segmentation_model, registered_model_name="segmentation_model_grading_fine_tune", signature=segmentation_model_signature)
     else:
-        train(grading_model, grading_model_pretrained, segmentation_model, train_dataloader, train_metrics_dataloader, validation_dataloader, optimizer, criterion, NUM_EPOCHS)
+        train(f_low_model, f_high_model, attention_model, segmentation_model, train_dataloader, train_metrics_dataloader, validation_dataloader, optimizer, criterion, NUM_EPOCHS)
 
 if __name__ == '__main__':
     main()
